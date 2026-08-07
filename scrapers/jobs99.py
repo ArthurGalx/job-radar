@@ -38,7 +38,7 @@ class Jobs99Scraper(BaseScraper):
 
             try:
                 page.goto(url, timeout=60000)
-                page.wait_for_selector("a.opportunity-card", timeout=15000)
+                page.wait_for_selector("a.opportunity-card", state="attached", timeout=15000)
                 time.sleep(2)
 
                 cards = page.query_selector_all("a.opportunity-card")

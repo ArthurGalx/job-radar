@@ -1,6 +1,7 @@
 
 import re
 import time
+from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
 
@@ -76,11 +77,12 @@ class GeekHunterScraper(BaseScraper):
                         link = card.get_attribute("href")
                         if not link:
                             continue
+
+                        path = urlparse(link).path if link.startswith("http") else link
+                        empresa = _empresa_da_url(path)
+
                         if link.startswith("/"):
-                            empresa = _empresa_da_url(link)
                             link = f"https://www.geekhunter.com{link}"
-                        else:
-                            empresa = "Não informado"
 
                         vagas.append(Job(
                             titulo=titulo,
