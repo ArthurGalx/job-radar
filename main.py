@@ -2,9 +2,9 @@
 import argparse
 import time
 
-from config import KEYWORDS, CIDADES, INTERVALO_MINUTOS
+from config import KEYWORDS, CIDADES, INTERVALO_MINUTOS, TERMOS_BUSCA
 from database.database import iniciar_db, ja_vista, salvar_vaga
-from notifier.telegram import notificar_vaga
+from notifier.telegram import notificar_vaga, enviar_mensagem
 from scrapers.catho import CathoScraper
 from scrapers.geekhunter import GeekHunterScraper
 from scrapers.gupy import GupyScraper
@@ -18,39 +18,35 @@ from logger import get_logger
 
 logger = get_logger()
 
-# Termos de busca enviados para cada site (a filtragem fina por KEYWORDS/CIDADES
-# acontece depois, em filtrar_vagas). Mantidos enxutos pra não deixar o ciclo
-# muito longo, já que cada termo é uma nova página carregada por site.
-_TERMOS_BUSCA = [
-    "analista de dados",
-    "power bi",
-    "business intelligence",
-]
-
 # Revelo não entrou: o portal de vagas exige login pra navegar, não dá pra
 # fazer scraping público de forma confiável.
 SCRAPERS = [
-    GupyScraper(termos_busca=_TERMOS_BUSCA),
-    TramposScraper(termos_busca=_TERMOS_BUSCA),
-    Jobs99Scraper(termos_busca=_TERMOS_BUSCA),
-    CathoScraper(termos_busca=_TERMOS_BUSCA),
-    SolidesScraper(termos_busca=_TERMOS_BUSCA),
-    GeekHunterScraper(termos_busca=_TERMOS_BUSCA),
-    IndeedScraper(termos_busca=_TERMOS_BUSCA),
-    LinkedInScraper(termos_busca=_TERMOS_BUSCA),
+    GupyScraper(termos_busca=TERMOS_BUSCA),
+    TramposScraper(termos_busca=TERMOS_BUSCA),
+    Jobs99Scraper(termos_busca=TERMOS_BUSCA),
+    CathoScraper(termos_busca=TERMOS_BUSCA),
+    SolidesScraper(termos_busca=TERMOS_BUSCA),
+    GeekHunterScraper(termos_busca=TERMOS_BUSCA),
+    IndeedScraper(termos_busca=TERMOS_BUSCA),
+    LinkedInScraper(termos_busca=TERMOS_BUSCA),
 ]
 
 
 def ciclo_de_busca():
     total_novas = 0
+    total_brutas = 0
+    scrapers_com_erro = []
 
     for scraper in SCRAPERS:
+        nome = scraper.__class__.__name__
         try:
             vagas = scraper.buscar_vagas()
         except Exception as e:
-            logger.error(f"Erro no scraper {scraper.__class__.__name__}: {e}")
+            logger.error(f"Erro no scraper {nome}: {e}")
+            scrapers_com_erro.append(nome)
             continue
 
+        total_brutas += len(vagas)
         vagas_filtradas = filtrar_vagas(vagas, KEYWORDS, CIDADES)
 
         for vaga in vagas_filtradas:
@@ -63,6 +59,23 @@ def ciclo_de_busca():
             logger.info(f"Nova vaga: {vaga.titulo} - {vaga.empresa}")
 
     logger.info(f"Ciclo concluído. {total_novas} vaga(s) nova(s).")
+
+    # Alerta de saúde: se a maioria das fontes falhou, ou se nenhuma vaga
+    # bruta apareceu em fonte nenhuma, avisa no Telegram. Sem isso, um
+    # bloqueio geral ou mudança de layout passaria despercebido — o
+    # workflow do GitHub Actions continuaria "verde" mesmo com tudo quebrado.
+    if scrapers_com_erro and len(scrapers_com_erro) >= len(SCRAPERS) / 2:
+        enviar_mensagem(
+            "⚠️ <b>JobRadar com problema</b>\n\n"
+            f"{len(scrapers_com_erro)}/{len(SCRAPERS)} fontes falharam neste ciclo: "
+            f"{', '.join(scrapers_com_erro)}.\n\nVale checar o log do GitHub Actions."
+        )
+    elif total_brutas == 0:
+        enviar_mensagem(
+            "⚠️ <b>JobRadar sem nenhum resultado</b>\n\n"
+            "Nenhuma vaga bruta encontrada em nenhuma fonte neste ciclo — "
+            "provável bloqueio geral ou mudança de layout. Vale checar o log."
+        )
 
 
 def main():

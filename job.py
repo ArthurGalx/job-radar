@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from urllib.parse import urlsplit, urlunsplit
 import hashlib
 
 
@@ -12,8 +13,16 @@ class Job:
 
     @property
     def id(self) -> str:
-        """Identificador único da vaga, baseado no link (evita duplicatas)."""
-        return hashlib.md5(self.link.encode()).hexdigest()
+        """Identificador único da vaga, baseado no link (evita duplicatas).
+
+        O hash usa o link sem query string (?utm_source=..., ?jobBoardSource=...
+        etc.), porque alguns sites variam esses parâmetros entre visitas à
+        mesma vaga — se entrassem no hash, a mesma vaga poderia gerar IDs
+        diferentes em runs distintos e disparar notificação duplicada.
+        """
+        partes = urlsplit(self.link)
+        link_normalizado = urlunsplit((partes.scheme, partes.netloc, partes.path, "", ""))
+        return hashlib.md5(link_normalizado.encode()).hexdigest()
 
     def combina_com(self, keywords: list[str], cidades: list[str]) -> bool:
         """Verifica se a vaga bate com pelo menos uma keyword E uma cidade/modalidade."""
