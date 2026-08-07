@@ -1,0 +1,26 @@
+
+{
+  "keywords": [
+    "Analista de Dados",
+    "Analista BI",
+    "Business Intelligence",
+    "Power BI",
+    "Analytics",
+    "Data Analyst",
+    "Analista de Negócios",
+    "Desenvolvedor BI"
+  ],
+  "locations": [
+    "Remoto",
+    "Campina Grande",
+    "João Pessoa",
+    "Recife",
+    "Natal"
+  ],
+  "check_interval": 5,
+  "telegram": {
+    "enabled": true,
+    "bot_token": "",
+    "chat_id": ""
+  }
+}
