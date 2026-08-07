@@ -5,20 +5,39 @@ import time
 from config import KEYWORDS, CIDADES, INTERVALO_MINUTOS
 from database.database import iniciar_db, ja_vista, salvar_vaga
 from notifier.telegram import notificar_vaga
+from scrapers.catho import CathoScraper
+from scrapers.geekhunter import GeekHunterScraper
 from scrapers.gupy import GupyScraper
+from scrapers.indeed import IndeedScraper
+from scrapers.jobs99 import Jobs99Scraper
+from scrapers.linkedin import LinkedInScraper
+from scrapers.solides import SolidesScraper
+from scrapers.trampos import TramposScraper
 from utils.filtro import filtrar_vagas
 from logger import get_logger
 
 logger = get_logger()
 
-# Adicione novos scrapers aqui conforme forem implementados
-# (Catho, Trampos, 99jobs etc.)
+# Termos de busca enviados para cada site (a filtragem fina por KEYWORDS/CIDADES
+# acontece depois, em filtrar_vagas). Mantidos enxutos pra não deixar o ciclo
+# muito longo, já que cada termo é uma nova página carregada por site.
+_TERMOS_BUSCA = [
+    "analista de dados",
+    "power bi",
+    "business intelligence",
+]
+
+# Revelo não entrou: o portal de vagas exige login pra navegar, não dá pra
+# fazer scraping público de forma confiável.
 SCRAPERS = [
-    GupyScraper(termos_busca=[
-        "analista de dados",
-        "power bi",
-        "business intelligence",
-    ]),
+    GupyScraper(termos_busca=_TERMOS_BUSCA),
+    TramposScraper(termos_busca=_TERMOS_BUSCA),
+    Jobs99Scraper(termos_busca=_TERMOS_BUSCA),
+    CathoScraper(termos_busca=_TERMOS_BUSCA),
+    SolidesScraper(termos_busca=_TERMOS_BUSCA),
+    GeekHunterScraper(termos_busca=_TERMOS_BUSCA),
+    IndeedScraper(termos_busca=_TERMOS_BUSCA),
+    LinkedInScraper(termos_busca=_TERMOS_BUSCA),
 ]
 
 

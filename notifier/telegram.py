@@ -31,12 +31,15 @@ def enviar_mensagem(texto: str) -> bool:
 
 
 def notificar_vaga(job) -> bool:
+    # TODO (Fase 3): incluir aqui a % de compatibilidade com o currículo,
+    # calculada por IA, quando essa etapa for implementada.
     texto = (
-        f"🎯 <b>Nova vaga encontrada!</b>\n\n"
-        f"<b>{job.titulo}</b>\n"
-        f"🏢 {job.empresa}\n"
-        f"📍 {job.local}\n"
-        f"🌐 {job.site}\n\n"
-        f"🔗 {job.link}"
+        f"🚨 <b>Nova vaga encontrada!</b>\n\n"
+        f"<b>Empresa:</b> {job.empresa}\n"
+        f"<b>Cargo:</b> {job.titulo}\n"
+        f"<b>Local:</b> {job.local}\n"
+        f"<b>Site:</b> {job.site}\n\n"
+        f"Encontrada agora\n\n"
+        f"<b>Link:</b>\n{job.link}"
     )
     return enviar_mensagem(texto)

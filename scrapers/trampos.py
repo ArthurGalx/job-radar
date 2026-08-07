@@ -1,0 +1,86 @@
+
+import re
+import time
+
+from playwright.sync_api import sync_playwright
+
+from job import Job
+from logger import get_logger
+from scrapers.base import BaseScraper
+
+logger = get_logger()
+
+_PREFIXOS_TIPO = re.compile(r"^(EMPREGO|EST[ÁA]GIO|FREELA|BANCO DE TALENTOS)", re.IGNORECASE)
+
+
+class TramposScraper(BaseScraper):
+    """Busca vagas no https://trampos.co (job board de tecnologia/comunicação)."""
+
+    def __init__(self, termos_busca: list[str]):
+        self.termos_busca = termos_busca
+
+    def buscar_vagas(self) -> list[Job]:
+        vagas: list[Job] = []
+        for termo in self.termos_busca:
+            vagas.extend(self._buscar_termo(termo))
+
+        logger.info(f"[Trampos] {len(vagas)} vaga(s) encontrada(s) no total")
+        return vagas
+
+    def _buscar_termo(self, termo: str) -> list[Job]:
+        logger.info(f"[Trampos] Buscando: {termo}")
+        vagas: list[Job] = []
+        url = f"https://trampos.co/oportunidades/?tr={termo.replace(' ', '%20')}"
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+
+            try:
+                page.goto(url, timeout=60000)
+                page.wait_for_selector(".opportunity-box a", timeout=15000)
+                time.sleep(2)
+
+                cards = page.query_selector_all(".opportunity-box a")
+                for card in cards:
+                    try:
+                        titulo_el = card.query_selector("h4")
+                        if not titulo_el:
+                            continue
+                        titulo = titulo_el.inner_text().strip()
+
+                        empresa_el = card.query_selector("h5")
+                        empresa = empresa_el.inner_text().strip() if empresa_el else ""
+                        if not empresa:
+                            empresa = "Não informado"
+
+                        linhas = [l.strip() for l in card.inner_text().split("\n") if l.strip()]
+                        local = "Não informado"
+                        for linha in linhas[1:]:
+                            if _PREFIXOS_TIPO.match(linha):
+                                local = _PREFIXOS_TIPO.sub("", linha).strip()
+                                break
+
+                        link = card.get_attribute("href")
+                        if not link:
+                            continue
+                        if link.startswith("/"):
+                            link = f"https://trampos.co{link}"
+
+                        vagas.append(Job(
+                            titulo=titulo,
+                            empresa=empresa,
+                            local=local,
+                            link=link,
+                            site="Trampos",
+                        ))
+                    except Exception as e:
+                        logger.warning(f"[Trampos] Erro ao processar card: {e}")
+                        continue
+
+            except Exception as e:
+                logger.error(f"[Trampos] Erro ao buscar '{termo}': {e}")
+            finally:
+                browser.close()
+
+        return vagas
