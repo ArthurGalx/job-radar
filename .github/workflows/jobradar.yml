@@ -39,6 +39,31 @@ jobs:
         run: |
           git config user.name "jobradar-bot"
           git config user.email "jobradar-bot@users.noreply.github.com"
+
           git add data/jobs.db
-          git diff --cached --quiet || git commit -m "chore: atualiza vagas vistas [skip ci]"
-          git push
+          if git diff --cached --quiet; then
+            echo "Nada novo pra commitar."
+            exit 0
+          fi
+          git commit -m "chore: atualiza vagas vistas [skip ci]"
+
+          # Se outro push (execução concorrente, ou push manual) chegou
+          # primeiro, o push abaixo é rejeitado. Em vez de falhar o run
+          # (o que faria a vaga ser notificada de novo no próximo ciclo),
+          # sincroniza e tenta de novo. data/jobs.db é binário (SQLite):
+          # em caso de conflito, "-X ours" mantém a versão deste run
+          # (base + vagas encontradas agora) — na pior hipótese, uma vaga
+          # marcada só do outro lado é notificada mais uma vez, sem perda
+          # real de dado.
+          n=0
+          until git push; do
+            n=$((n + 1))
+            if [ "$n" -ge 5 ]; then
+              echo "Push falhou depois de 5 tentativas."
+              exit 1
+            fi
+            echo "Push rejeitado, sincronizando (tentativa $n)..."
+            git fetch origin main
+            git rebase origin/main -X ours || git rebase --abort
+            sleep $((RANDOM % 5 + 1))
+          done
