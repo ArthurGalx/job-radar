@@ -44,10 +44,13 @@ class IndeedScraper(BaseScraper):
                     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
                 )
             )
+            page.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })"
+            )
 
             try:
                 page.goto(url, timeout=60000)
-                page.wait_for_selector(".job_seen_beacon", timeout=15000)
+                page.wait_for_selector(".job_seen_beacon", state="attached", timeout=25000)
                 time.sleep(2)
 
                 cards = page.query_selector_all(".job_seen_beacon")

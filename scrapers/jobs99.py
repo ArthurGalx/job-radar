@@ -46,10 +46,19 @@ class Jobs99Scraper(BaseScraper):
 
             try:
                 page.goto(url, timeout=60000)
-                page.wait_for_selector("a.opportunity-card", state="attached", timeout=25000)
-                time.sleep(2)
+                sem_resultados = False
+                try:
+                    page.wait_for_selector("a.opportunity-card", state="attached", timeout=25000)
+                except Exception:
+                    if "0 oportunidades" in page.content():
+                        logger.info(f"[99Jobs] 0 resultados reais para '{termo}'.")
+                        sem_resultados = True
+                    else:
+                        raise
 
-                cards = page.query_selector_all("a.opportunity-card")
+                cards = [] if sem_resultados else page.query_selector_all("a.opportunity-card")
+                if cards:
+                    time.sleep(2)
                 for card in cards:
                     try:
                         titulo_el = card.query_selector("h1")

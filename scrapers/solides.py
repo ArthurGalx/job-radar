@@ -37,11 +37,19 @@ class SolidesScraper(BaseScraper):
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            page = browser.new_page(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                )
+            )
+            page.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })"
+            )
 
             try:
                 page.goto(url, timeout=60000)
-                page.wait_for_selector("li:has(h2 a)", timeout=15000)
+                page.wait_for_selector("li:has(h2 a)", state="attached", timeout=25000)
                 time.sleep(2)
 
                 cards = page.query_selector_all("li:has(h2 a)")
