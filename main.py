@@ -35,7 +35,7 @@ SCRAPERS = [
 def ciclo_de_busca():
     total_novas = 0
     total_brutas = 0
-    scrapers_com_erro = []
+    scrapers_com_problema = []
 
     for scraper in SCRAPERS:
         nome = scraper.__class__.__name__
@@ -43,7 +43,16 @@ def ciclo_de_busca():
             vagas = scraper.buscar_vagas()
         except Exception as e:
             logger.error(f"Erro no scraper {nome}: {e}")
-            scrapers_com_erro.append(nome)
+            scrapers_com_problema.append(nome)
+            continue
+
+        # Cada scraper trata timeout por termo internamente (só loga e segue
+        # pro próximo termo), então um site totalmente bloqueado não lança
+        # exceção pra cá — só devolve lista vazia. Por isso também contamos
+        # "0 vaga bruta nessa fonte" como problema, não só exceção.
+        if not vagas:
+            logger.warning(f"{nome} não retornou nenhuma vaga bruta neste ciclo.")
+            scrapers_com_problema.append(nome)
             continue
 
         total_brutas += len(vagas)
@@ -60,21 +69,16 @@ def ciclo_de_busca():
 
     logger.info(f"Ciclo concluído. {total_novas} vaga(s) nova(s).")
 
-    # Alerta de saúde: se a maioria das fontes falhou, ou se nenhuma vaga
-    # bruta apareceu em fonte nenhuma, avisa no Telegram. Sem isso, um
-    # bloqueio geral ou mudança de layout passaria despercebido — o
-    # workflow do GitHub Actions continuaria "verde" mesmo com tudo quebrado.
-    if scrapers_com_erro and len(scrapers_com_erro) >= len(SCRAPERS) / 2:
+    # Alerta de saúde: se a maioria das fontes falhou/voltou vazia, avisa no
+    # Telegram. Sem isso, um bloqueio geral ou mudança de layout passaria
+    # despercebido — o workflow do GitHub Actions continuaria "verde" mesmo
+    # com tudo quebrado.
+    if len(scrapers_com_problema) >= len(SCRAPERS) / 2:
         enviar_mensagem(
             "⚠️ <b>JobRadar com problema</b>\n\n"
-            f"{len(scrapers_com_erro)}/{len(SCRAPERS)} fontes falharam neste ciclo: "
-            f"{', '.join(scrapers_com_erro)}.\n\nVale checar o log do GitHub Actions."
-        )
-    elif total_brutas == 0:
-        enviar_mensagem(
-            "⚠️ <b>JobRadar sem nenhum resultado</b>\n\n"
-            "Nenhuma vaga bruta encontrada em nenhuma fonte neste ciclo — "
-            "provável bloqueio geral ou mudança de layout. Vale checar o log."
+            f"{len(scrapers_com_problema)}/{len(SCRAPERS)} fontes falharam ou voltaram "
+            f"vazias neste ciclo: {', '.join(scrapers_com_problema)}.\n\n"
+            "Vale checar o log do GitHub Actions."
         )
 
 
