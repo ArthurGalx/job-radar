@@ -49,10 +49,19 @@ class SolidesScraper(BaseScraper):
 
             try:
                 page.goto(url, timeout=60000)
-                page.wait_for_selector("li:has(h2 a)", state="attached", timeout=25000)
-                time.sleep(2)
+                sem_resultados = False
+                try:
+                    page.wait_for_selector("li:has(h2 a)", state="attached", timeout=25000)
+                except Exception:
+                    if "0 vaga(s) encontrada" in page.inner_text("body"):
+                        logger.info(f"[Solides] 0 resultados reais para '{termo}'.")
+                        sem_resultados = True
+                    else:
+                        raise
+                if not sem_resultados:
+                    time.sleep(2)
 
-                cards = page.query_selector_all("li:has(h2 a)")
+                cards = [] if sem_resultados else page.query_selector_all("li:has(h2 a)")
                 for card in cards:
                     try:
                         titulo_el = card.query_selector("h2 a")
