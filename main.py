@@ -100,11 +100,15 @@ def main():
     for palavra in KEYWORDS:
         print(f"• {palavra}")
 
-    print(f"\nIntervalo de checagem: {INTERVALO_MINUTOS} min\n")
+    if not args.once:
+        print(f"\nIntervalo de checagem: {INTERVALO_MINUTOS} min\n")
 
     iniciar_db()
 
     if args.once:
+        # No GitHub Actions, quem controla a frequência é o cron do workflow,
+        # não essa variável — por isso não faz sentido imprimir um intervalo
+        # aqui, ele nem é usado nesse modo.
         ciclo_de_busca()
         return
 
