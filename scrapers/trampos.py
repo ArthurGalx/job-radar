@@ -38,10 +38,19 @@ class TramposScraper(BaseScraper):
 
             try:
                 page.goto(url, timeout=60000)
-                page.wait_for_selector(".opportunity-box a", timeout=15000)
-                time.sleep(2)
+                sem_resultados = False
+                try:
+                    page.wait_for_selector(".opportunity-box a", timeout=15000)
+                except Exception:
+                    if "página 1 de 0" in page.inner_text("body"):
+                        logger.info(f"[Trampos] 0 resultados reais para '{termo}'.")
+                        sem_resultados = True
+                    else:
+                        raise
+                if not sem_resultados:
+                    time.sleep(2)
 
-                cards = page.query_selector_all(".opportunity-box a")
+                cards = [] if sem_resultados else page.query_selector_all(".opportunity-box a")
                 for card in cards:
                     try:
                         titulo_el = card.query_selector("h4")

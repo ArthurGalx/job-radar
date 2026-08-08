@@ -50,7 +50,12 @@ class Jobs99Scraper(BaseScraper):
                 try:
                     page.wait_for_selector("a.opportunity-card", state="attached", timeout=25000)
                 except Exception:
-                    if "0 oportunidades" in page.content():
+                    # page.content() é o HTML bruto — o "0" e "oportunidades" ficam
+                    # em elementos separados ali, então nunca batiam como texto
+                    # contíguo. inner_text() reflete o texto renderizado (como
+                    # aparece na tela), que é onde essa frase realmente é contígua.
+                    texto_pagina = page.inner_text("body")
+                    if "oportunidades para o termo" in texto_pagina:
                         logger.info(f"[99Jobs] 0 resultados reais para '{termo}'.")
                         sem_resultados = True
                     else:

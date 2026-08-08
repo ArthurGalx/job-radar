@@ -35,10 +35,18 @@ class GupyScraper(BaseScraper):
 
             try:
                 page.goto(url, timeout=60000)
-                page.wait_for_selector("a:has(h3)", timeout=15000)
-                time.sleep(2)  # dá tempo do React terminar de renderizar
+                sem_resultados = False
+                try:
+                    page.wait_for_selector("a:has(h3)", timeout=15000)
+                except Exception:
+                    if "Nenhum resultado foi encontrado" in page.inner_text("body"):
+                        logger.info(f"[Gupy] 0 resultados reais para '{termo}'.")
+                        sem_resultados = True
+                    else:
+                        raise
+                time.sleep(2 if not sem_resultados else 0)  # dá tempo do React terminar de renderizar
 
-                cards = page.query_selector_all("a:has(h3)")
+                cards = [] if sem_resultados else page.query_selector_all("a:has(h3)")
                 for card in cards:
                     try:
                         titulo_el = card.query_selector("h3")

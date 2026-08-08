@@ -50,10 +50,19 @@ class GeekHunterScraper(BaseScraper):
 
             try:
                 page.goto(url, timeout=60000)
-                page.wait_for_selector('a[href*="/jobs/"]', timeout=15000)
-                time.sleep(2)
+                sem_resultados = False
+                try:
+                    page.wait_for_selector('a[href*="/jobs/"]', timeout=15000)
+                except Exception:
+                    if "0 vagas disponíveis" in page.inner_text("body"):
+                        logger.info(f"[GeekHunter] 0 resultados reais para '{termo}'.")
+                        sem_resultados = True
+                    else:
+                        raise
+                if not sem_resultados:
+                    time.sleep(2)
 
-                cards = page.query_selector_all('a[href*="/jobs/"]')
+                cards = [] if sem_resultados else page.query_selector_all('a[href*="/jobs/"]')
                 for card in cards:
                     try:
                         linhas = [l.strip() for l in card.inner_text().split("\n") if l.strip()]
