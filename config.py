@@ -19,6 +19,7 @@ KEYWORDS = [
     "BI Developer",
     "BI Analyst",
     "Analista de Reporting",
+    "Business Analyst",
 ]
 
 # Termos de busca enviados a cada site. Ficam separados das KEYWORDS de
@@ -34,6 +35,7 @@ TERMOS_CARGO = [
     "business intelligence",
     "power bi",
     "data analyst",
+    "business analyst",
 ]
 
 TERMOS_FERRAMENTA = [
