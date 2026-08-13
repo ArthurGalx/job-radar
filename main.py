@@ -7,6 +7,8 @@ from config import (
     KEYWORDS_CARGO_FORTE,
     KEYWORDS_CARGO_AMBIGUO,
     QUALIFICADORES_DADOS,
+    FERRAMENTAS_TITULO,
+    QUALIFICADORES_CARGO,
     CIDADES,
     INTERVALO_MINUTOS,
     TERMOS_BUSCA,
@@ -65,7 +67,13 @@ def ciclo_de_busca():
 
         total_brutas += len(vagas)
         vagas_filtradas = filtrar_vagas(
-            vagas, KEYWORDS_CARGO_FORTE, KEYWORDS_CARGO_AMBIGUO, QUALIFICADORES_DADOS, CIDADES
+            vagas,
+            KEYWORDS_CARGO_FORTE,
+            KEYWORDS_CARGO_AMBIGUO,
+            QUALIFICADORES_DADOS,
+            FERRAMENTAS_TITULO,
+            QUALIFICADORES_CARGO,
+            CIDADES,
         )
 
         for vaga in vagas_filtradas:

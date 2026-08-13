@@ -22,6 +22,18 @@ KEYWORDS_CARGO_FORTE = [
     "BI Analyst",
     "Analista de Reporting",
     "Analista de Inteligência de Mercado",
+    "Analista de Indicadores",
+    "Reporting Analyst",
+    "Insights Analyst",
+    "Data Insights Analyst",
+    "MIS Analyst",
+    "Analista de MIS",
+    "Assistente de BI",
+    "Auxiliar de BI",
+    "Analista de Inteligência Comercial",
+    "Data Specialist",
+    "Data Quality Analyst",
+    "Data Intelligence Analyst",
 ]
 
 # Cargo ambíguo: título que também é usado em vaga sem nada a ver com
@@ -34,6 +46,7 @@ KEYWORDS_CARGO_AMBIGUO = [
     "Business Analyst",
     "Analista de Negócios",
     "Business Analytics",
+    "Analista de Performance",
 ]
 
 # Termo que precisa aparecer junto no título quando o cargo é ambíguo, pra
@@ -50,6 +63,28 @@ QUALIFICADORES_DADOS = [
     "métricas",
     "reporting",
     "insights",
+]
+
+# Ferramenta que aparece como núcleo do título ("Analista de Power BI").
+# Só conta como match se o título TAMBÉM tiver uma palavra de cargo — é o
+# espelho da regra de KEYWORDS_CARGO_AMBIGUO: lá o cargo é ambíguo e pede
+# domínio, aqui a ferramenta é ambígua e pede cargo. Sem isso, "Power BI"
+# sozinho aprovaria "Power BI Senior" e "Desenvolvedor (Power BI + Python)",
+# que são vaga de desenvolvimento, não de análise.
+FERRAMENTAS_TITULO = [
+    "Power BI",
+]
+
+# Palavra de cargo que confirma que a vaga de ferramenta é de análise.
+# "desenvolvedor"/"developer"/"engenheiro" ficam FORA de propósito: é o que
+# mantém vaga de dev fora do radar.
+QUALIFICADORES_CARGO = [
+    "analista",
+    "analyst",
+    "especialista",
+    "specialist",
+    "consultor",
+    "consultant",
 ]
 
 KEYWORDS = KEYWORDS_CARGO_FORTE + KEYWORDS_CARGO_AMBIGUO
@@ -82,6 +117,12 @@ TERMOS_FERRAMENTA = [
     "dax",
     "power query",
     "microsoft fabric",
+    "sql",
+    "python",
+    "tableau",
+    "qlik",
+    "looker",
+    "bigquery",
 ]
 
 TERMOS_BUSCA = TERMOS_CARGO + TERMOS_FERRAMENTA
@@ -95,7 +136,7 @@ CIDADES = [
     "Maceió",
 ]
 
-INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 120))
+INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 180))
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")

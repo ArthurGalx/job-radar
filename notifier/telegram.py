@@ -37,6 +37,7 @@ def notificar_vaga(job) -> bool:
         f"🚨 <b>Nova vaga encontrada!</b>\n\n"
         f"<b>Empresa:</b> {job.empresa}\n"
         f"<b>Cargo:</b> {job.titulo}\n"
+        f"<b>Nível:</b> {job.senioridade}\n"
         f"<b>Local:</b> {job.local}\n"
         f"<b>Site:</b> {job.site}\n\n"
         f"Encontrada agora\n\n"

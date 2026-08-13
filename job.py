@@ -24,6 +24,49 @@ def _contem_termo(termo: str, texto: str) -> bool:
     return re.search(rf"\b{re.escape(termo)}\b", texto) is not None
 
 
+def _tem_termo(termo: str, texto: str) -> bool:
+    """Casa o termo como palavra inteira (aceitando plural em -s).
+
+    Sem isso, termo curto casa dentro de outra palavra: "bi" casaria em
+    "mo(bi)le", "am(bi)ente" e "(bi)lingue", furando a regra que exige
+    qualificador de verdade no título.
+    """
+    return re.search(rf"(?<!\w){re.escape(termo)}s?(?!\w)", texto) is not None
+
+
+# Ordem importa: do mais específico pro mais genérico. Título não é
+# filtrado por senioridade — só é classificado, pra decidir isso na hora de
+# ler a notificação, não em deixar a vaga passar ou não.
+_NIVEIS_SENIORIDADE = [
+    ("Estágio/Trainee", (r"estagi[ao]", r"estagio", r"trainee")),
+    ("Júnior", (r"junior", r"jr\.?")),
+    ("Pleno", (r"pleno", r"pl\.?")),
+    ("Sênior", (r"senior", r"sr\.?", r"sênior")),
+    ("Especialista", (r"especialista", r"specialist")),
+    ("Liderança", (r"coordenador", r"coordenadora", r"gerente", r"manager", r"head")),
+]
+
+
+def _detectar_senioridade(titulo: str) -> str:
+    """Classifica o nível pelo título, sem excluir nada — a ideia é decidir
+    na hora de ler a notificação se vale a pena abrir o link, não descartar
+    vaga automaticamente (júnior pode virar sênior lendo a descrição, e
+    "PL"/"Sr" no título nem sempre reflete o que a empresa pede de verdade).
+    """
+    titulo_norm = _normalizar(titulo)
+
+    for nivel, padroes in _NIVEIS_SENIORIDADE:
+        for padrao in padroes:
+            if re.search(rf"(?<!\w){padrao}(?!\w)", titulo_norm):
+                return nivel
+
+    numeral = re.search(r"(?<!\w)(i{1,3}|iv)(?!\w)", titulo_norm)
+    if numeral:
+        return f"Nível {numeral.group(1).upper()}"
+
+    return "Não especificado"
+
+
 @dataclass
 class Job:
     titulo: str
@@ -45,11 +88,22 @@ class Job:
         link_normalizado = urlunsplit((partes.scheme, partes.netloc, partes.path, "", ""))
         return hashlib.md5(link_normalizado.encode()).hexdigest()
 
+    @property
+    def senioridade(self) -> str:
+        """Nível classificado a partir do título (Júnior/Pleno/Sênior/...).
+
+        Isso é só informativo pra notificação — a vaga não é excluída por
+        senioridade em nenhum momento do filtro.
+        """
+        return _detectar_senioridade(self.titulo)
+
     def combina_com(
         self,
         keywords_forte: list[str],
         keywords_ambiguo: list[str],
-        qualificadores: list[str],
+        qualificadores_dados: list[str],
+        ferramentas_titulo: list[str],
+        qualificadores_cargo: list[str],
         cidades: list[str],
     ) -> bool:
         """Verifica se a vaga bate com pelo menos uma keyword E uma cidade/modalidade.
@@ -81,11 +135,16 @@ class Job:
 
         bate_forte = any(_contem_termo(_normalizar(k), titulo_norm) for k in keywords_forte)
 
-        bate_ambiguo = any(
-            _contem_termo(_normalizar(k), titulo_norm) for k in keywords_ambiguo
-        ) and any(_contem_termo(_normalizar(q), titulo_norm) for q in qualificadores)
+        bate_ambiguo = any(_normalizar(k) in titulo_norm for k in keywords_ambiguo) and any(
+            _tem_termo(_normalizar(q), titulo_norm) for q in qualificadores_dados
+        )
 
-        bate_keyword = bate_forte or bate_ambiguo
+        # Espelho da regra acima: ferramenta no título só vale com cargo junto.
+        bate_ferramenta = any(
+            _normalizar(f) in titulo_norm for f in ferramentas_titulo
+        ) and any(_tem_termo(_normalizar(q), titulo_norm) for q in qualificadores_cargo)
+
+        bate_keyword = bate_forte or bate_ambiguo or bate_ferramenta
 
         # "remot" (sem \b de propósito — cobre Remoto/Remota/100% Remoto/etc,
         # e é uma raiz de palavra, não uma palavra curta tipo "bi" que
