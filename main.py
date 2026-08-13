@@ -2,7 +2,15 @@
 import argparse
 import time
 
-from config import KEYWORDS, CIDADES, INTERVALO_MINUTOS, TERMOS_BUSCA
+from config import (
+    KEYWORDS,
+    KEYWORDS_CARGO_FORTE,
+    KEYWORDS_CARGO_AMBIGUO,
+    QUALIFICADORES_DADOS,
+    CIDADES,
+    INTERVALO_MINUTOS,
+    TERMOS_BUSCA,
+)
 from database.database import iniciar_db, ja_vista, salvar_vaga
 from notifier.telegram import notificar_vaga, enviar_mensagem
 from scrapers.catho import CathoScraper
@@ -56,7 +64,9 @@ def ciclo_de_busca():
             continue
 
         total_brutas += len(vagas)
-        vagas_filtradas = filtrar_vagas(vagas, KEYWORDS, CIDADES)
+        vagas_filtradas = filtrar_vagas(
+            vagas, KEYWORDS_CARGO_FORTE, KEYWORDS_CARGO_AMBIGUO, QUALIFICADORES_DADOS, CIDADES
+        )
 
         for vaga in vagas_filtradas:
             if ja_vista(vaga.id):
