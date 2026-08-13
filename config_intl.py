@@ -74,6 +74,13 @@ TERMOS_BUSCA_INTL = [
 # número de buscas (termos x países), então começa pequeno e dá pra
 # expandir depois que confirmar que vale o tempo de execução.
 #
+# "United States" e "United Kingdom" foram REMOVIDOS de propósito: mesmo com
+# os termos de busca pedindo "spanish/portuguese speaker", o location filtra
+# geografia, não idioma — a maioria das vagas retornadas pra EUA/Reino Unido
+# é vaga comum do mercado local, que pede inglês fluente (causa raiz do
+# problema relatado). O escopo agora é só América Latina + países ibéricos
+# que falam espanhol/português, que é o que esse pipeline sempre quis cobrir.
+#
 # "Latin America"/"LATAM"/"EMEA"/"Iberia" NÃO entraram aqui — testei ao
 # vivo no endpoint do LinkedIn e nenhum desses nomes de região resolve como
 # location de verdade (retorna resultado genérico, sem filtrar nada, ou
@@ -82,10 +89,8 @@ TERMOS_BUSCA_INTL = [
 # texto dentro do termo de busca (acima) em vez de location. "Iberia" não
 # precisa de entrada própria — já é coberto por Spain + Portugal abaixo.
 LOCATIONS_INTL = [
-    "United States",
     "Spain",
     "Portugal",
-    "United Kingdom",
     "Mexico",
     "Colombia",
     "Argentina",
@@ -129,19 +134,22 @@ CIDADES_EUROPA_IBERICA = [
 # Indeed usa subdomínio por país, não parâmetro de location como o
 # LinkedIn. Confirmei ao vivo que es.indeed.com, pt.indeed.com e
 # mx.indeed.com funcionam e trazem vaga local de verdade (ex: "Analista de
-# Dados" em Lisboa, "Data Analyst" em Barcelona). uk/co/ar/cl seguem o
-# mesmo padrão de domínio mas não testei individualmente — se algum não
-# resolver como esperado, o scraper só loga 0 vagas pra aquele país, não
-# quebra o resto.
+# Dados" em Lisboa, "Data Analyst" em Barcelona). co/ar/cl seguem o mesmo
+# padrão de domínio mas não testei individualmente — se algum não resolver
+# como esperado, o scraper só loga 0 vagas pra aquele país, não quebra o
+# resto.
+#
+# "Estados Unidos" (www.indeed.com) e "Reino Unido" (uk.indeed.com) foram
+# REMOVIDOS pelo mesmo motivo do LOCATIONS_INTL: domínio de país não filtra
+# idioma, e a maioria das vagas desses dois mercados pede inglês fluente —
+# era a fonte real das notificações de vaga em inglês.
 #
 # Mesmo aviso do Indeed BR original: tem proteção anti-bot que pode
 # bloquear acesso automatizado (principalmente de IP de nuvem/datacenter),
 # mesmo funcionando em teste manual.
 DOMINIOS_INDEED_INTL = {
-    "Estados Unidos": "www.indeed.com",
     "Espanha": "es.indeed.com",
     "Portugal": "pt.indeed.com",
-    "Reino Unido": "uk.indeed.com",
     "México": "mx.indeed.com",
     "Colômbia": "co.indeed.com",
     "Argentina": "ar.indeed.com",

@@ -111,6 +111,20 @@ class Job:
         return hashlib.md5(link_normalizado.encode()).hexdigest()
 
     @property
+    def chave_secundaria(self) -> str:
+        """Chave de dedup secundária: empresa + título normalizados.
+
+        O `.id` sozinho é hash da URL — a mesma vaga publicada em fontes
+        diferentes (ex: Gupy e LinkedIn, ou LinkedIn BR e LinkedIn Intl) tem
+        URL diferente em cada uma, então o `.id` também diverge e a vaga
+        passa como "nova" mais de uma vez. Medido: 23% de repetição (60
+        registros pra 46 pares distintos). Empresa+título normalizados
+        (minúsculo, sem acento) captura isso mesmo com pequena variação de
+        formatação entre sites.
+        """
+        return f"{_normalizar(self.empresa)}|{_normalizar(self.titulo)}"
+
+    @property
     def senioridade(self) -> str:
         """Nível classificado a partir do título (Júnior/Pleno/Sênior/...).
 

@@ -77,11 +77,20 @@ def ciclo_de_busca_intl():
         vagas_remotas = filtrar_vagas(vagas, KEYWORDS_INTL, [], [], [], [], CIDADES_INTL)
 
         for vaga in vagas_remotas:
-            if ja_vista(vaga.id):
+            if ja_vista(vaga):
+                continue
+
+            # Mesma ordem do main.py: notifica antes de salvar, senão uma
+            # falha no Telegram marca a vaga como vista sem nunca ter
+            # avisado de verdade.
+            if not notificar_vaga(vaga):
+                logger.warning(
+                    f"Falha ao notificar '{vaga.titulo}' (internacional) - não marcada "
+                    "como vista, tenta de novo no próximo ciclo."
+                )
                 continue
 
             salvar_vaga(vaga)
-            notificar_vaga(vaga)
             total_novas += 1
             logger.info(f"Nova vaga internacional (remota): {vaga.titulo} - {vaga.empresa}")
 
@@ -95,11 +104,17 @@ def ciclo_de_busca_intl():
                 vagas, KEYWORDS_INTL, [], [], [], [], CIDADES_EUROPA_IBERICA
             )
             for vaga in candidatas_iberia:
-                if vaga.id in ids_remotas or ja_vista(vaga.id):
+                if vaga.id in ids_remotas or ja_vista(vaga):
+                    continue
+
+                if not _notificar_vaga_exploratoria(vaga):
+                    logger.warning(
+                        f"Falha ao notificar '{vaga.titulo}' (exploratória) - não marcada "
+                        "como vista, tenta de novo no próximo ciclo."
+                    )
                     continue
 
                 salvar_vaga(vaga)
-                _notificar_vaga_exploratoria(vaga)
                 total_novas += 1
                 logger.info(f"Nova vaga internacional (exploratória): {vaga.titulo} - {vaga.empresa}")
 

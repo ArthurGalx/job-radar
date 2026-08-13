@@ -134,8 +134,6 @@ CIDADES = [
     "Recife",
     "Natal",
     "Maceió",
-    "Salvador",
-    "Fortaleza",
     "Jaboatão",
     "Aracaju",
     "Teresina",

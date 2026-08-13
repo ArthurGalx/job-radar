@@ -77,11 +77,21 @@ def ciclo_de_busca():
         )
 
         for vaga in vagas_filtradas:
-            if ja_vista(vaga.id):
+            if ja_vista(vaga):
+                continue
+
+            # Notifica ANTES de salvar. Se salvasse primeiro e o Telegram
+            # falhasse, a vaga ficava marcada como "vista" pra sempre — o
+            # próximo ciclo pulava ela em ja_vista() e a vaga se perdia sem
+            # nunca ter sido notificada de verdade.
+            if not notificar_vaga(vaga):
+                logger.warning(
+                    f"Falha ao notificar '{vaga.titulo}' - não marcada como vista, "
+                    "tenta de novo no próximo ciclo."
+                )
                 continue
 
             salvar_vaga(vaga)
-            notificar_vaga(vaga)
             total_novas += 1
             logger.info(f"Nova vaga: {vaga.titulo} - {vaga.empresa}")
 
