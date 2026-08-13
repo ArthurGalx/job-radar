@@ -11,6 +11,13 @@ logger = get_logger()
 
 _MODALIDADES = {"remoto", "híbrido", "hibrido", "presencial"}
 
+# Busca só a 1a página (10-12 vagas) nunca alcançava vaga de cidade menor
+# (Recife, Natal, Maceió etc.) — um termo genérico tipo "analista de dados"
+# tem centenas de resultados nacionais, e São Paulo/grandes polos sempre
+# dominam a 1a página. Paginando, aumenta a chance real de achar vaga das
+# cidades monitoradas, ao custo de mais requests por termo.
+MAX_PAGINAS = 3
+
 
 class GupyScraper(BaseScraper):
     """Busca vagas no portal público da Gupy (https://portal.gupy.io)."""
@@ -29,67 +36,78 @@ class GupyScraper(BaseScraper):
     def _buscar_termo(self, termo: str) -> list[Job]:
         logger.info(f"[Gupy] Buscando: {termo}")
         vagas: list[Job] = []
-        url = f"https://portal.gupy.io/job-search/term={termo.replace(' ', '%20')}"
+        base_url = f"https://portal.gupy.io/job-search/term={termo.replace(' ', '%20')}"
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
             try:
-                page.goto(url, timeout=60000)
-                sem_resultados = False
-                try:
-                    page.wait_for_selector("a:has(h3)", timeout=15000)
-                except Exception:
-                    if "Nenhum resultado foi encontrado" in page.inner_text("body"):
-                        logger.info(f"[Gupy] 0 resultados reais para '{termo}'.")
-                        sem_resultados = True
-                    else:
-                        raise
-                time.sleep(2 if not sem_resultados else 0)  # dá tempo do React terminar de renderizar
-
-                cards = [] if sem_resultados else page.query_selector_all("a:has(h3)")
-                for card in cards:
+                for pagina in range(1, MAX_PAGINAS + 1):
+                    url = base_url if pagina == 1 else f"{base_url}?page={pagina}"
+                    page.goto(url, timeout=60000)
+                    sem_resultados = False
                     try:
-                        titulo_el = card.query_selector("h3")
-                        if not titulo_el:
+                        page.wait_for_selector("a:has(h3)", timeout=15000)
+                    except Exception:
+                        if pagina > 1:
+                            # Página além do fim: para de paginar esse termo.
+                            break
+                        if "Nenhum resultado foi encontrado" in page.inner_text("body"):
+                            logger.info(f"[Gupy] 0 resultados reais para '{termo}'.")
+                            sem_resultados = True
+                        else:
+                            raise
+                    time.sleep(2 if not sem_resultados else 0)  # dá tempo do React terminar de renderizar
+
+                    cards = [] if sem_resultados else page.query_selector_all("a:has(h3)")
+                    if not cards:
+                        break
+
+                    for card in cards:
+                        try:
+                            titulo_el = card.query_selector("h3")
+                            if not titulo_el:
+                                continue
+                            titulo = titulo_el.inner_text().strip()
+
+                            empresa_el = card.query_selector("p")
+                            empresa = empresa_el.inner_text().strip() if empresa_el else "Não informado"
+
+                            local_el = card.query_selector('[data-testid="job-location"]')
+                            cidade = local_el.inner_text().strip() if local_el else "Não informado"
+
+                            # O modelo de trabalho (Remoto/Híbrido/Presencial) fica num span
+                            # solto no card. Antes dependia do atributo alt do ícone ao lado
+                            # (alt="Ícone de Modelo de Trabalho"), mas a Gupy parou de renderizar
+                            # esse atributo — agora procura direto pelo texto do span, mesma
+                            # técnica usada nos outros scrapers.
+                            modelo = ""
+                            for span in card.query_selector_all("span"):
+                                texto_span = span.inner_text().strip()
+                                if texto_span.lower() in _MODALIDADES:
+                                    modelo = texto_span
+                                    break
+
+                            local = f"{cidade} ({modelo})" if modelo else cidade
+
+                            link = card.get_attribute("href")
+                            if not link:
+                                continue
+
+                            vagas.append(Job(
+                                titulo=titulo,
+                                empresa=empresa,
+                                local=local,
+                                link=link,
+                                site="Gupy",
+                            ))
+                        except Exception as e:
+                            logger.warning(f"[Gupy] Erro ao processar card: {e}")
                             continue
-                        titulo = titulo_el.inner_text().strip()
 
-                        empresa_el = card.query_selector("p")
-                        empresa = empresa_el.inner_text().strip() if empresa_el else "Não informado"
-
-                        local_el = card.query_selector('[data-testid="job-location"]')
-                        cidade = local_el.inner_text().strip() if local_el else "Não informado"
-
-                        # O modelo de trabalho (Remoto/Híbrido/Presencial) fica num span
-                        # solto no card. Antes dependia do atributo alt do ícone ao lado
-                        # (alt="Ícone de Modelo de Trabalho"), mas a Gupy parou de renderizar
-                        # esse atributo — agora procura direto pelo texto do span, mesma
-                        # técnica usada nos outros scrapers.
-                        modelo = ""
-                        for span in card.query_selector_all("span"):
-                            texto_span = span.inner_text().strip()
-                            if texto_span.lower() in _MODALIDADES:
-                                modelo = texto_span
-                                break
-
-                        local = f"{cidade} ({modelo})" if modelo else cidade
-
-                        link = card.get_attribute("href")
-                        if not link:
-                            continue
-
-                        vagas.append(Job(
-                            titulo=titulo,
-                            empresa=empresa,
-                            local=local,
-                            link=link,
-                            site="Gupy",
-                        ))
-                    except Exception as e:
-                        logger.warning(f"[Gupy] Erro ao processar card: {e}")
-                        continue
+                    if sem_resultados:
+                        break
 
             except Exception as e:
                 logger.error(f"[Gupy] Erro ao buscar '{termo}': {e}")

@@ -12,6 +12,12 @@ logger = get_logger()
 
 _PREFIXOS_TIPO = re.compile(r"^(EMPREGO|EST[ÁA]GIO|FREELA|BANCO DE TALENTOS)", re.IGNORECASE)
 
+# Ver comentário equivalente em scrapers/gupy.py: só a 1a página nunca
+# alcançava vaga de cidade menor (Recife, Natal, Maceió etc.). O Trampos não
+# pagina por URL — o botão "Mostre-me mais vagas!" carrega mais resultados
+# via JS (AJAX), então paginamos clicando nele em vez de trocar a URL.
+MAX_CLIQUES_MAIS_VAGAS = 2
+
 
 class TramposScraper(BaseScraper):
     """Busca vagas no https://trampos.co (job board de tecnologia/comunicação)."""
@@ -49,6 +55,15 @@ class TramposScraper(BaseScraper):
                         raise
                 if not sem_resultados:
                     time.sleep(2)
+                    for _ in range(MAX_CLIQUES_MAIS_VAGAS):
+                        botao = page.query_selector('a:has-text("Mostre-me mais vagas")')
+                        if not botao:
+                            break  # já é a última página, botão some
+                        try:
+                            botao.click()
+                            time.sleep(2)
+                        except Exception:
+                            break
 
                 cards = [] if sem_resultados else page.query_selector_all(".opportunity-box a")
                 for card in cards:

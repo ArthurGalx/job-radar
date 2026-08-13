@@ -13,6 +13,10 @@ logger = get_logger()
 
 _MODALIDADES = {"presencial", "híbrido", "hibrido", "remoto"}
 
+# Ver comentário equivalente em scrapers/gupy.py: só a 1a página nunca
+# alcançava vaga de cidade menor (Recife, Natal, Maceió etc.).
+MAX_PAGINAS = 3
+
 
 def _empresa_da_url(path: str) -> str:
     """A listagem não mostra o nome da empresa, só o slug na URL
@@ -42,67 +46,76 @@ class GeekHunterScraper(BaseScraper):
         logger.info(f"[GeekHunter] Buscando: {termo}")
         vagas: list[Job] = []
         termo_url = termo.replace(" ", "+")
-        url = f"https://www.geekhunter.com/pt/vagas?searchTerm={termo_url}&page=1"
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
             try:
-                page.goto(url, timeout=60000)
-                sem_resultados = False
-                try:
-                    page.wait_for_selector('a[href*="/jobs/"]', timeout=15000)
-                except Exception:
-                    if "0 vagas disponíveis" in page.inner_text("body"):
-                        logger.info(f"[GeekHunter] 0 resultados reais para '{termo}'.")
-                        sem_resultados = True
-                    else:
-                        raise
-                if not sem_resultados:
-                    time.sleep(2)
-
-                cards = [] if sem_resultados else page.query_selector_all('a[href*="/jobs/"]')
-                for card in cards:
+                for pagina in range(1, MAX_PAGINAS + 1):
+                    url = f"https://www.geekhunter.com/pt/vagas?searchTerm={termo_url}&page={pagina}"
+                    page.goto(url, timeout=60000)
+                    sem_resultados = False
                     try:
-                        linhas = [l.strip() for l in card.inner_text().split("\n") if l.strip()]
-                        if not linhas:
-                            continue
-                        titulo = linhas[0]
-
-                        modalidade = ""
-                        cidade = ""
-                        for linha in linhas[1:]:
-                            if linha.lower() in _MODALIDADES:
-                                modalidade = linha.capitalize()
-                            elif re.match(r"^🇧🇷", linha):
-                                cidade = linha.replace("🇧🇷", "").strip()
-
-                        if cidade:
-                            local = f"{cidade} ({modalidade})" if modalidade else cidade
+                        page.wait_for_selector('a[href*="/jobs/"]', timeout=15000)
+                    except Exception:
+                        if pagina > 1:
+                            break
+                        if "0 vagas disponíveis" in page.inner_text("body"):
+                            logger.info(f"[GeekHunter] 0 resultados reais para '{termo}'.")
+                            sem_resultados = True
                         else:
-                            local = modalidade or "Não informado"
+                            raise
+                    if not sem_resultados:
+                        time.sleep(2)
 
-                        link = card.get_attribute("href")
-                        if not link:
+                    cards = [] if sem_resultados else page.query_selector_all('a[href*="/jobs/"]')
+                    if not cards:
+                        break
+
+                    for card in cards:
+                        try:
+                            linhas = [l.strip() for l in card.inner_text().split("\n") if l.strip()]
+                            if not linhas:
+                                continue
+                            titulo = linhas[0]
+
+                            modalidade = ""
+                            cidade = ""
+                            for linha in linhas[1:]:
+                                if linha.lower() in _MODALIDADES:
+                                    modalidade = linha.capitalize()
+                                elif re.match(r"^🇧🇷", linha):
+                                    cidade = linha.replace("🇧🇷", "").strip()
+
+                            if cidade:
+                                local = f"{cidade} ({modalidade})" if modalidade else cidade
+                            else:
+                                local = modalidade or "Não informado"
+
+                            link = card.get_attribute("href")
+                            if not link:
+                                continue
+
+                            path = urlparse(link).path if link.startswith("http") else link
+                            empresa = _empresa_da_url(path)
+
+                            if link.startswith("/"):
+                                link = f"https://www.geekhunter.com{link}"
+
+                            vagas.append(Job(
+                                titulo=titulo,
+                                empresa=empresa,
+                                local=local,
+                                link=link,
+                                site="GeekHunter",
+                            ))
+                        except Exception as e:
+                            logger.warning(f"[GeekHunter] Erro ao processar card: {e}")
                             continue
 
-                        path = urlparse(link).path if link.startswith("http") else link
-                        empresa = _empresa_da_url(path)
-
-                        if link.startswith("/"):
-                            link = f"https://www.geekhunter.com{link}"
-
-                        vagas.append(Job(
-                            titulo=titulo,
-                            empresa=empresa,
-                            local=local,
-                            link=link,
-                            site="GeekHunter",
-                        ))
-                    except Exception as e:
-                        logger.warning(f"[GeekHunter] Erro ao processar card: {e}")
-                        continue
+                    if sem_resultados:
+                        break
 
             except Exception as e:
                 logger.error(f"[GeekHunter] Erro ao buscar '{termo}': {e}")

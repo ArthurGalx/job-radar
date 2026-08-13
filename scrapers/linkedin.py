@@ -9,6 +9,12 @@ from scrapers.base import BaseScraper
 
 logger = get_logger()
 
+# Ver comentário equivalente em scrapers/gupy.py: só a 1a página nunca
+# alcançava vaga de cidade menor (Recife, Natal, Maceió etc.) — confirmado
+# ao vivo que vaga real dessas cidades existe mas fica fora do top 10
+# nacional. O LinkedIn pagina via &start= (10 vagas por página).
+MAX_PAGINAS = 3
+
 
 class LinkedInScraper(BaseScraper):
     """Busca vagas usando o endpoint público ("guest") de busca de vagas do
@@ -39,10 +45,6 @@ class LinkedInScraper(BaseScraper):
         logger.info(f"[LinkedIn] Buscando: {termo}")
         vagas: list[Job] = []
         termo_url = termo.replace(" ", "+")
-        url = (
-            "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-            f"?keywords={termo_url}&location=Brasil&start=0"
-        )
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -54,45 +56,53 @@ class LinkedInScraper(BaseScraper):
             )
 
             try:
-                page.goto(url, timeout=60000)
-                time.sleep(2)
-
-                cards = page.query_selector_all("li")
-                if not cards:
-                    logger.warning(
-                        "[LinkedIn] Nenhum resultado retornado — provável bloqueio/"
-                        "rate-limit do LinkedIn nesse endpoint."
+                for pagina in range(MAX_PAGINAS):
+                    start = pagina * 10
+                    url = (
+                        "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+                        f"?keywords={termo_url}&location=Brasil&start={start}"
                     )
+                    page.goto(url, timeout=60000)
+                    time.sleep(2)
 
-                for card in cards:
-                    try:
-                        titulo_el = card.query_selector("h3.base-search-card__title")
-                        if not titulo_el:
+                    cards = page.query_selector_all("li")
+                    if not cards:
+                        if pagina == 0:
+                            logger.warning(
+                                "[LinkedIn] Nenhum resultado retornado — provável bloqueio/"
+                                "rate-limit do LinkedIn nesse endpoint."
+                            )
+                        break
+
+                    for card in cards:
+                        try:
+                            titulo_el = card.query_selector("h3.base-search-card__title")
+                            if not titulo_el:
+                                continue
+                            titulo = titulo_el.inner_text().strip()
+
+                            empresa_el = card.query_selector("h4.base-search-card__subtitle a")
+                            empresa = empresa_el.inner_text().strip() if empresa_el else "Não informado"
+
+                            local_el = card.query_selector(".job-search-card__location")
+                            local = local_el.inner_text().strip() if local_el else "Não informado"
+
+                            link_el = card.query_selector("a.base-card__full-link")
+                            link = link_el.get_attribute("href") if link_el else None
+                            if not link:
+                                continue
+                            link = link.split("?")[0]
+
+                            vagas.append(Job(
+                                titulo=titulo,
+                                empresa=empresa,
+                                local=local,
+                                link=link,
+                                site="LinkedIn",
+                            ))
+                        except Exception as e:
+                            logger.warning(f"[LinkedIn] Erro ao processar card: {e}")
                             continue
-                        titulo = titulo_el.inner_text().strip()
-
-                        empresa_el = card.query_selector("h4.base-search-card__subtitle a")
-                        empresa = empresa_el.inner_text().strip() if empresa_el else "Não informado"
-
-                        local_el = card.query_selector(".job-search-card__location")
-                        local = local_el.inner_text().strip() if local_el else "Não informado"
-
-                        link_el = card.query_selector("a.base-card__full-link")
-                        link = link_el.get_attribute("href") if link_el else None
-                        if not link:
-                            continue
-                        link = link.split("?")[0]
-
-                        vagas.append(Job(
-                            titulo=titulo,
-                            empresa=empresa,
-                            local=local,
-                            link=link,
-                            site="LinkedIn",
-                        ))
-                    except Exception as e:
-                        logger.warning(f"[LinkedIn] Erro ao processar card: {e}")
-                        continue
 
             except Exception as e:
                 logger.error(f"[LinkedIn] Erro ao buscar '{termo}': {e}")

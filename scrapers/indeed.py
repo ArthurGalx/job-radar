@@ -9,6 +9,11 @@ from scrapers.base import BaseScraper
 
 logger = get_logger()
 
+# Ver comentário equivalente em scrapers/gupy.py: só a 1a página nunca
+# alcançava vaga de cidade menor (Recife, Natal, Maceió etc.). O Indeed
+# pagina via &start= (10 vagas por página).
+MAX_PAGINAS = 3
+
 
 class IndeedScraper(BaseScraper):
     """Busca vagas no https://br.indeed.com.
@@ -34,7 +39,6 @@ class IndeedScraper(BaseScraper):
         logger.info(f"[Indeed] Buscando: {termo}")
         vagas: list[Job] = []
         termo_url = termo.replace(" ", "+")
-        url = f"https://br.indeed.com/jobs?q={termo_url}&l="
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -49,45 +53,53 @@ class IndeedScraper(BaseScraper):
             )
 
             try:
-                page.goto(url, timeout=60000)
-                page.wait_for_selector(".job_seen_beacon", state="attached", timeout=25000)
-                time.sleep(2)
-
-                cards = page.query_selector_all(".job_seen_beacon")
-                for card in cards:
+                for pagina in range(MAX_PAGINAS):
+                    start = pagina * 10
+                    url = f"https://br.indeed.com/jobs?q={termo_url}&l=&start={start}"
+                    page.goto(url, timeout=60000)
                     try:
-                        titulo_el = card.query_selector("h3.jobTitle a.jcs-JobTitle span")
-                        if not titulo_el:
-                            titulo_el = card.query_selector("h3.jobTitle")
-                        if not titulo_el:
+                        page.wait_for_selector(".job_seen_beacon", state="attached", timeout=25000)
+                    except Exception:
+                        break
+                    time.sleep(2)
+
+                    cards = page.query_selector_all(".job_seen_beacon")
+                    if not cards:
+                        if pagina == 0:
+                            logger.warning("[Indeed] Nenhum card encontrado — possível bloqueio anti-bot.")
+                        break
+
+                    for card in cards:
+                        try:
+                            titulo_el = card.query_selector("h3.jobTitle a.jcs-JobTitle span")
+                            if not titulo_el:
+                                titulo_el = card.query_selector("h3.jobTitle")
+                            if not titulo_el:
+                                continue
+                            titulo = titulo_el.inner_text().strip()
+
+                            empresa_el = card.query_selector('[data-testid="company-name"]')
+                            empresa = empresa_el.inner_text().strip() if empresa_el else "Não informado"
+
+                            local_el = card.query_selector('[data-testid="text-location"]')
+                            local = local_el.inner_text().strip() if local_el else "Não informado"
+
+                            link_el = card.query_selector("a[data-jk]")
+                            jk = link_el.get_attribute("data-jk") if link_el else None
+                            if not jk:
+                                continue
+                            link = f"https://br.indeed.com/viewjob?jk={jk}"
+
+                            vagas.append(Job(
+                                titulo=titulo,
+                                empresa=empresa,
+                                local=local,
+                                link=link,
+                                site="Indeed",
+                            ))
+                        except Exception as e:
+                            logger.warning(f"[Indeed] Erro ao processar card: {e}")
                             continue
-                        titulo = titulo_el.inner_text().strip()
-
-                        empresa_el = card.query_selector('[data-testid="company-name"]')
-                        empresa = empresa_el.inner_text().strip() if empresa_el else "Não informado"
-
-                        local_el = card.query_selector('[data-testid="text-location"]')
-                        local = local_el.inner_text().strip() if local_el else "Não informado"
-
-                        link_el = card.query_selector("a[data-jk]")
-                        jk = link_el.get_attribute("data-jk") if link_el else None
-                        if not jk:
-                            continue
-                        link = f"https://br.indeed.com/viewjob?jk={jk}"
-
-                        vagas.append(Job(
-                            titulo=titulo,
-                            empresa=empresa,
-                            local=local,
-                            link=link,
-                            site="Indeed",
-                        ))
-                    except Exception as e:
-                        logger.warning(f"[Indeed] Erro ao processar card: {e}")
-                        continue
-
-                if not cards:
-                    logger.warning("[Indeed] Nenhum card encontrado — possível bloqueio anti-bot.")
 
             except Exception as e:
                 logger.error(f"[Indeed] Erro ao buscar '{termo}': {e}")

@@ -57,7 +57,7 @@ CIDADES = [
     "Maceió",
 ]
 
-INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 30))
+INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 120))
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
