@@ -134,6 +134,14 @@ CIDADES = [
     "Recife",
     "Natal",
     "Maceió",
+    "Salvador",
+    "Fortaleza",
+    "Jaboatão",
+    "Aracaju",
+    "Teresina",
+    "São Luís",
+    "Petrolina",
+    "Caruaru",
 ]
 
 INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 180))

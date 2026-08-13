@@ -34,6 +34,27 @@ def _tem_termo(termo: str, texto: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(termo)}s?(?!\w)", texto) is not None
 
 
+# Vocabulário de "é vaga remota" usado no campo local. Antes só tinha
+# "remot" + "home office" — "Remote" (inglês) só passava por acidente, por
+# conter a substring "remot", e faltava vocabulário que não compartilha
+# essa raiz: "teletrabalho" (termo padrão em Portugal), "work from home",
+# "anywhere". Centralizado aqui em vez de espalhado, e documentado que
+# "remot" sozinho já cobre bastante coisa por ser raiz de palavra, não uma
+# palavra fixa: Remoto, Remota, Remote, Trabalho Remoto, 100% Remoto,
+# Fully Remote — todas contêm "remot" em algum ponto.
+TERMOS_REMOTO = [
+    "remot",  # raiz: Remoto/Remota/Remote/Trabalho Remoto/100% Remoto/Fully Remote
+    "home office",
+    "work from home",
+    "teletrabalho",
+    "anywhere",
+]
+
+
+def _e_remoto(texto: str) -> bool:
+    return any(termo in texto for termo in TERMOS_REMOTO)
+
+
 # Ordem importa: do mais específico pro mais genérico. Título não é
 # filtrado por senioridade — só é classificado, pra decidir isso na hora de
 # ler a notificação, não em deixar a vaga passar ou não.
@@ -146,12 +167,8 @@ class Job:
 
         bate_keyword = bate_forte or bate_ambiguo or bate_ferramenta
 
-        # "remot" (sem \b de propósito — cobre Remoto/Remota/100% Remoto/etc,
-        # e é uma raiz de palavra, não uma palavra curta tipo "bi" que
-        # aparece dentro de outras) e "home office" cobrem as variações
-        # usadas pelos diferentes sites.
         quer_remoto = any(_normalizar(c) in ("remoto", "remota") for c in cidades)
-        bate_remoto = quer_remoto and ("remot" in local_norm or "home office" in local_norm)
+        bate_remoto = quer_remoto and _e_remoto(local_norm)
 
         bate_cidade = bate_remoto or any(
             _contem_termo(_normalizar(c), local_norm)
