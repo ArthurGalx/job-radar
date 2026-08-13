@@ -9,6 +9,8 @@ from scrapers.base import BaseScraper
 
 logger = get_logger()
 
+_MODALIDADES = {"remoto", "híbrido", "hibrido", "presencial"}
+
 
 class GupyScraper(BaseScraper):
     """Busca vagas no portal público da Gupy (https://portal.gupy.io)."""
@@ -61,14 +63,16 @@ class GupyScraper(BaseScraper):
                         cidade = local_el.inner_text().strip() if local_el else "Não informado"
 
                         # O modelo de trabalho (Remoto/Híbrido/Presencial) fica num span
-                        # separado, sem data-testid, ao lado de um ícone identificado
-                        # pelo atributo alt="Ícone de Modelo de Trabalho".
-                        modelo_icon = card.query_selector('svg[alt="Ícone de Modelo de Trabalho"]')
+                        # solto no card. Antes dependia do atributo alt do ícone ao lado
+                        # (alt="Ícone de Modelo de Trabalho"), mas a Gupy parou de renderizar
+                        # esse atributo — agora procura direto pelo texto do span, mesma
+                        # técnica usada nos outros scrapers.
                         modelo = ""
-                        if modelo_icon:
-                            modelo = modelo_icon.evaluate(
-                                "el => el.closest('div')?.parentElement?.querySelector('span')?.textContent?.trim() || ''"
-                            )
+                        for span in card.query_selector_all("span"):
+                            texto_span = span.inner_text().strip()
+                            if texto_span.lower() in _MODALIDADES:
+                                modelo = texto_span
+                                break
 
                         local = f"{cidade} ({modelo})" if modelo else cidade
 
