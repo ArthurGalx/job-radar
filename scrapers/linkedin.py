@@ -3,7 +3,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-from job import Job
+from job import Job, _e_remoto, _normalizar
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -15,6 +15,18 @@ logger = get_logger()
 # nacional. O LinkedIn pagina via &start= (10 vagas por página).
 MAX_PAGINAS = 3
 
+# Segunda passada, só com o filtro nativo de remoto do LinkedIn (f_WT=2 —
+# confirmado ao vivo que existe e funciona: filtra de verdade por vaga
+# marcada como remota pelo próprio LinkedIn). Existe porque o card de busca
+# NUNCA mostra "Remoto" no campo local, nem nessa passada filtrada — mesmo
+# vaga 100% remota aparece com a cidade onde a empresa está registrada (ex:
+# "Analista de Dados" remoto veio como "Curitiba, PR"). Sem essa passada e
+# sem essa correção, só achávamos vaga remota por acidente (cidade
+# literalmente escrita "Remoto" na listagem, o que quase nunca acontece).
+# Menos páginas que a passada nacional pra não dobrar o custo do scraper —
+# volume de vaga remota tende a ser menor que o total nacional por termo.
+MAX_PAGINAS_REMOTO = 2
+
 
 class LinkedInScraper(BaseScraper):
     """Busca vagas usando o endpoint público ("guest") de busca de vagas do
@@ -24,10 +36,14 @@ class LinkedInScraper(BaseScraper):
     Ele costuma funcionar sem login, mas o LinkedIn pode bloquear ou
     rate-limitar acessos automatizados repetidos a qualquer momento —
     principalmente vindos de IPs de nuvem/datacenter, como os do GitHub
-    Actions. Não é possível garantir estabilidade a longo prazo. Também não
-    mostra a modalidade (remoto/híbrido/presencial) na listagem, só a
-    cidade — vagas remotas só são pegas se a cidade vier literalmente como
-    "Remoto".
+    Actions. Não é possível garantir estabilidade a longo prazo.
+
+    Roda duas passadas por termo: uma nacional sem filtro de modalidade
+    (pega vaga presencial/híbrida em cidade específica, cobre Recife/Natal/
+    Maceió etc.) e outra com f_WT=2 (só vaga que o próprio LinkedIn marca
+    como remota). Essa segunda marca o campo `local` como remoto quando
+    necessário, porque o card não expõe isso sozinho (ver MAX_PAGINAS_REMOTO
+    acima).
     """
 
     def __init__(self, termos_busca: list[str]):
@@ -36,15 +52,18 @@ class LinkedInScraper(BaseScraper):
     def buscar_vagas(self) -> list[Job]:
         vagas: list[Job] = []
         for termo in self.termos_busca:
-            vagas.extend(self._buscar_termo(termo))
+            vagas.extend(self._buscar_termo(termo, remoto=False))
+            vagas.extend(self._buscar_termo(termo, remoto=True))
 
         logger.info(f"[LinkedIn] {len(vagas)} vaga(s) encontrada(s) no total")
         return vagas
 
-    def _buscar_termo(self, termo: str) -> list[Job]:
-        logger.info(f"[LinkedIn] Buscando: {termo}")
+    def _buscar_termo(self, termo: str, remoto: bool) -> list[Job]:
+        tag = "remoto (f_WT=2)" if remoto else "nacional"
+        logger.info(f"[LinkedIn] Buscando ({tag}): {termo}")
         vagas: list[Job] = []
         termo_url = termo.replace(" ", "+")
+        max_paginas = MAX_PAGINAS_REMOTO if remoto else MAX_PAGINAS
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -56,11 +75,12 @@ class LinkedInScraper(BaseScraper):
             )
 
             try:
-                for pagina in range(MAX_PAGINAS):
+                for pagina in range(max_paginas):
                     start = pagina * 10
+                    filtro_wt = "&f_WT=2" if remoto else ""
                     url = (
                         "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-                        f"?keywords={termo_url}&location=Brasil&start={start}"
+                        f"?keywords={termo_url}&location=Brasil{filtro_wt}&start={start}"
                     )
                     page.goto(url, timeout=60000)
                     time.sleep(2)
@@ -69,8 +89,8 @@ class LinkedInScraper(BaseScraper):
                     if not cards:
                         if pagina == 0:
                             logger.warning(
-                                "[LinkedIn] Nenhum resultado retornado — provável bloqueio/"
-                                "rate-limit do LinkedIn nesse endpoint."
+                                f"[LinkedIn] Nenhum resultado retornado ({tag}) — provável "
+                                "bloqueio/rate-limit do LinkedIn nesse endpoint, ou 0 vaga real."
                             )
                         break
 
@@ -86,6 +106,14 @@ class LinkedInScraper(BaseScraper):
 
                             local_el = card.query_selector(".job-search-card__location")
                             local = local_el.inner_text().strip() if local_el else "Não informado"
+
+                            # f_WT=2 já garante que é vaga remota (o próprio
+                            # LinkedIn classificou assim), mesmo quando o
+                            # campo local só mostra a cidade da empresa. Sem
+                            # isso, o filtro de cidade em job.py descartaria
+                            # a vaga por não achar "remoto" no local.
+                            if remoto and not _e_remoto(_normalizar(local)):
+                                local = f"Remoto ({local})" if local and local != "Não informado" else "Remoto"
 
                             link_el = card.query_selector("a.base-card__full-link")
                             link = link_el.get_attribute("href") if link_el else None
@@ -105,7 +133,7 @@ class LinkedInScraper(BaseScraper):
                             continue
 
             except Exception as e:
-                logger.error(f"[LinkedIn] Erro ao buscar '{termo}': {e}")
+                logger.error(f"[LinkedIn] Erro ao buscar '{termo}' ({tag}): {e}")
             finally:
                 browser.close()
 

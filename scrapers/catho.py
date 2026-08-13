@@ -3,7 +3,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-from job import Job
+from job import Job, _e_remoto, _normalizar
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -17,9 +17,17 @@ def _slug(termo: str) -> str:
 class CathoScraper(BaseScraper):
     """Busca vagas no https://www.catho.com.br.
 
-    Observação: a listagem do Catho não mostra a modalidade (remoto/híbrido/
-    presencial) diretamente no card, só a cidade. Vagas remotas só são
-    capturadas se a própria cidade vier como "Remoto".
+    Observação sobre modalidade: o Catho NÃO tem parâmetro de URL pra filtro
+    de remoto — testei ao vivo (checkbox "Home Office" em Modalidade +
+    "Confirmar") e a URL nunca muda, é filtro client-side sem reflexo
+    navegável. Só que não precisa disso: as próprias vagas remotas do Catho
+    já anunciam isso no TÍTULO ("Work From Home Data Analyst", "Trabalhe de
+    Casa Analista de Business Intelligence" — confirmado ao vivo, inclusive
+    aparecendo já na busca sem filtro nenhum aplicado). Por isso, em vez de
+    automatizar o filtro (frágil, seletor duplicado por categoria de filtro)
+    ou abrir cada vaga (caro), verifica o sinal de remoto no título e, se
+    achar, marca isso no campo `local` — é o mesmo campo que o filtro de
+    cidade em job.py já lê.
     """
 
     def __init__(self, termos_busca: list[str]):
@@ -81,6 +89,11 @@ class CathoScraper(BaseScraper):
                             texto_local = paragrafos[1].inner_text()
                             if "-" in texto_local:
                                 local = texto_local.split("-")[-1].strip()
+
+                        # Título já entrega o sinal de remoto que o card não
+                        # expõe em campo próprio (ver docstring da classe).
+                        if _e_remoto(_normalizar(titulo)) and not _e_remoto(_normalizar(local)):
+                            local = f"Remoto ({local})" if local and local != "Não informado" else "Remoto"
 
                         vagas.append(Job(
                             titulo=titulo,

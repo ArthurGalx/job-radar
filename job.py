@@ -46,6 +46,7 @@ TERMOS_REMOTO = [
     "remot",  # raiz: Remoto/Remota/Remote/Trabalho Remoto/100% Remoto/Fully Remote
     "home office",
     "work from home",
+    "trabalhe de casa",  # variante em português vista ao vivo no Catho
     "teletrabalho",
     "anywhere",
 ]
