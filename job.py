@@ -241,6 +241,43 @@ _PALAVRAS_REGIAO_BR = {"cidade", "cidades", "regiao", "distrito", "condado"}
 # ou "Remoto" sem complemento) — trata como sem restrição.
 _PADRAO_ESCOPO_SEPARADOR = re.compile(r"remot[eoa]\w*\s*[–—\-,(:]+\s*")
 
+# MEDIDO: quando quem confirma remoto é `modalidade` (não o separador —
+# ver ramo `elif modalidade_norm in (...)` em extrair_escopo_remoto),
+# `resto` vira o texto de `local` INTEIRO, sem cortar nada antes dele.
+# Isso deixa vocabulário de modalidade (raiz "remot", "home office"...) e
+# o placeholder "Não informado" (valor padrão de `local` em todo scraper
+# que não achou o campo — Catho, Gupy, Indeed, LinkedIn, Solides, Trampos,
+# WeWorkRemotely...) dentro do candidato a mercado. Nenhum dos dois é
+# nome de país: local="Remoto" -> candidato "remoto"; local="Não
+# informado" -> candidato "nao informado"; local="Não informado (Remoto)"
+# -> candidato "nao informado (remoto)"; local="Home Office" -> candidato
+# "home office" — todos caem no fallback de _mercados_correspondentes
+# como "escopo desconhecido" e são BARRADOS por MERCADOS_REMOTO_ACEITOS,
+# quando na verdade são vaga remota sem NENHUM escopo geográfico
+# declarado (deveria ser conjunto vazio, sem restrição). 59 registros
+# nesse formato sobreviviam no jobs.db só porque foram gravados quando
+# `modalidade` ainda vinha vazia (o ramo modalidade nem existia). Remove
+# os dois antes de montar `candidato` — ver _remover_ruido_escopo.
+_PLACEHOLDER_LOCAL_AUSENTE = "nao informado"
+
+_PADRAO_VOCABULARIO_MODALIDADE = re.compile(
+    "|".join(
+        r"remot\w*" if termo == "remot" else re.escape(termo)
+        for termo in TERMOS_REMOTO
+    )
+)
+
+
+def _remover_ruido_escopo(texto: str) -> str:
+    """Tira vocabulário de modalidade e o placeholder de local ausente de
+    um texto já normalizado (ver MEDIDO acima) — o que sobrar é candidato
+    real a nome de mercado, não ruído de "isso é remoto" repetido ou "não
+    sei o local"."""
+    texto = _PADRAO_VOCABULARIO_MODALIDADE.sub(" ", texto)
+    texto = texto.replace(_PLACEHOLDER_LOCAL_AUSENTE, " ")
+    texto = texto.replace("(", " ").replace(")", " ")
+    return re.sub(r"\s+", " ", texto).strip()
+
 # MEDIDO em produção (jobs.db, fonte LinkedIn): 246 de 269 notificações
 # (91%) vieram no formato "Remoto (Cidade, SIGLA)" — ex: "Remoto (New York,
 # NY)", "Remoto (Austin, TX)", "Remoto (Seattle, WA)". Nenhuma batia em
@@ -372,7 +409,13 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> set[str]:
     separador no texto mas `modalidade` já diz remoto, trata `local`
     INTEIRO como candidato de escopo (a fonte confirmou modalidade por
     fora; o que sobra em `local` é só a âncora geográfica, sem precisar
-    achar "remot" dentro dele).
+    achar "remot" dentro dele). MEDIDO: tratar `local` inteiro sem limpar
+    vocabulário de modalidade ("Remoto", "Home Office"...) nem o
+    placeholder "Não informado" fazia esse vocabulário virar candidato a
+    mercado — local="Remoto" resolvia pra {"remoto"}, desconhecido pra
+    qualquer lista aceita, e a vaga era barrada mesmo sendo remota sem
+    NENHUM escopo declarado. _remover_ruido_escopo tira os dois antes de
+    montar o candidato.
     """
     texto_norm = _normalizar(texto_local)
     modalidade_norm = _normalizar(modalidade)
@@ -381,7 +424,9 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> set[str]:
         resto = texto_norm[m.end():]
         resto = re.split(r"[)\n]", resto)[0]
     elif modalidade_norm in ("remoto", "remota"):
-        resto = texto_norm
+        resto = _remover_ruido_escopo(texto_norm)
+        if not resto:
+            return set()
     else:
         return set()
 
