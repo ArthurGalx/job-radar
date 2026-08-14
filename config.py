@@ -122,10 +122,17 @@ TERMOS_CARGO_EXTRA = [
 
 TERMOS_CARGO = sorted(set(k.lower() for k in KEYWORDS) | set(TERMOS_CARGO_EXTRA))
 
+# MEDIDO em jobradar.log (12 rodízios completos, Gupy+99Jobs+GeekHunter+
+# Solides): "dax" e "power query" nunca resultaram em nenhuma vaga nova
+# notificada nessas 4 fontes — 0 em 48 buscas cada, a maioria vazia
+# ("0 resultados reais") e o resto timeout. "microsoft fabric" teve 1 vaga
+# no log inteiro (363 notificações) com o termo no título, e essa vaga
+# também tinha "Power BI"/"Analista de BI" no título — já seria achada por
+# termo que continua na lista. Timeout: os 3 termos concentraram metade
+# (13 de 26) dos timeouts dessas 4 fontes sendo só 3 dos 42 termos (7%) —
+# confirma o padrão relatado. Removidos por render zero e custarem sessão
+# igual a um termo de cargo.
 TERMOS_FERRAMENTA = [
-    "dax",
-    "power query",
-    "microsoft fabric",
     "sql",
     "python",
     "tableau",
