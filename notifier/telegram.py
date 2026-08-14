@@ -51,3 +51,29 @@ def notificar_vaga(job) -> bool:
         f"<b>Link:</b>\n{job.link}"
     )
     return enviar_mensagem(texto)
+
+
+def notificar_vaga_exploratoria(job) -> bool:
+    """Vaga achada via eixo Ibérico (Portugal/Espanha) — fisicamente lá, não
+    remota. Mensagem separada de notificar_vaga() de propósito: mandar isso
+    pelo template normal sugeriria "achado remoto de verdade", quando na
+    real é presencial/híbrida encontrada por busca geográfica dedicada (ver
+    CIDADES_EUROPA_IBERICA em config.py/config_intl.py). Compartilhada pelos
+    dois pipelines que têm esse eixo (main.py e main_intl.py) — texto já era
+    genérico o bastante pros dois antes de virar função só de um deles,
+    então movida pra cá em vez de duplicada.
+    """
+    linha_modalidade = f"<b>Modalidade:</b> {job.modalidade}\n" if job.modalidade else ""
+    texto = (
+        f"🧭 <b>Vaga exploratória (Portugal/Espanha)</b>\n\n"
+        f"<b>Empresa:</b> {job.empresa}\n"
+        f"<b>Cargo:</b> {job.titulo}\n"
+        f"<b>Nível:</b> {job.senioridade}\n"
+        f"<b>Local:</b> {job.local}\n"
+        f"{linha_modalidade}"
+        f"<b>Site:</b> {job.site}\n\n"
+        f"Achada via busca por Portugal/Espanha — modalidade não confirmada "
+        f"como remota, pode ser presencial ou híbrida. Confirma no link.\n\n"
+        f"<b>Link:</b>\n{job.link}"
+    )
+    return enviar_mensagem(texto)

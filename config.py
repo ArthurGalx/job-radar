@@ -37,6 +37,12 @@ KEYWORDS_CARGO_FORTE = [
     "Analytics Specialist",
     "Especialista em Dados",
     "Analista de Planejamento e Dados",
+    # "Datos" (espanhol) não é "Dados" (português) — nenhuma keyword em
+    # português cobre título em espanhol, mesmo sendo a mesma vaga. Faz
+    # sentido aqui no pipeline BR (não só em config_intl.py) porque
+    # LinkedInScraper já busca em Argentina/Chile (ver LOCATIONS_LINKEDIN).
+    "Analista de Datos",
+    "Analítica de Datos",
 ]
 
 # Cargo ambíguo: título que também é usado em vaga sem nada a ver com
@@ -155,6 +161,80 @@ CIDADES = [
     "Petrolina",
     "Caruaru",
 ]
+
+# MEDIDO: "Data Analyst @ Lisboa" e "Analista de Datos @ Madrid" reprovavam
+# na localização, não no cargo — CIDADES acima é whitelist só de cidade
+# brasileira, e a expansão de LOCATIONS_LINKEDIN pra Argentina/Chile (ver
+# abaixo) passou a trazer vaga presencial/híbrida em Portugal/Espanha de
+# vez em quando junto. Lista SEPARADA (não misturada em CIDADES, que
+# continua só-Brasil de propósito — ver decisão registrada na criação do
+# config_intl.py) com toggle próprio, pra dar pra ligar/desligar esse eixo
+# sem mexer no resto do filtro. Canônica aqui porque config_intl.py já
+# importa de config.py (não o contrário) — o pipeline internacional reusa
+# essa mesma lista em vez de manter uma cópia (risco de divergir, mesmo
+# motivo da unificação de _contem_termo/_tem_termo).
+CIDADES_EUROPA_IBERICA = [
+    "Portugal",
+    "Lisboa",
+    "Porto",
+    "Braga",
+    "Espanha",
+    "España",
+    "Spain",
+    "Madrid",
+    "Barcelona",
+    "Valencia",
+]
+
+# Toggle independente do ATIVAR_EIXO_IBERICO de config_intl.py — são dois
+# eixos diferentes (esse aqui é do pipeline BR/main.py, aquele é do
+# pipeline internacional/main_intl.py), cada um com seu próprio liga/
+# desliga, mesmo compartilhando a mesma lista de cidades acima.
+#
+# DESLIGADO: do mercado internacional, só interessa vaga remota — vaga
+# presencial/híbrida em Lisboa/Madrid (o que esse eixo notifica, marcada
+# "exploratória") não é o que o usuário quer. CIDADES_EUROPA_IBERICA
+# continua definida (não precisa apagar) pra caso o eixo volte a ser
+# ligado depois — só o toggle muda.
+ATIVAR_EIXO_IBERICO_BR = False
+
+# LinkedInScraper é a única fonte do pipeline BR que também alcança vaga
+# fora do Brasil (as outras são portais brasileiros) — mas até aqui rodava
+# só com location=Brasil fixo no código (scrapers/linkedin.py:88), então
+# essa "porta pra fora" nunca era usada.
+#
+# Mercado "casa": busca modalidade completa (presencial/híbrida + remoto),
+# porque o usuário mora aqui e vaga local de verdade interessa.
+LOCATIONS_LINKEDIN = ["Brasil"]
+
+# Mercados adicionais: só busca REMOTA (f_WT=2) — vaga presencial/híbrida
+# num país onde o usuário não mora não serve, então nem faz sentido gastar
+# a passada nacional ali (era puro desperdício: Argentina/Chile já rodavam
+# as duas passadas antes, mas a nacional nunca batia em CIDADES mesmo,
+# que é só cidade brasileira). Espanhol ou português — mesmo critério do
+# pipeline internacional. Lista reaproveita exatamente os países já usados
+# e testados ao vivo no endpoint do LinkedIn em config_intl.py
+# (LOCATIONS_INTL) — evita arriscar nome de país nunca testado (grafia
+# errada ou região que o LinkedIn não resolve como location de verdade,
+# como já visto com "LATAM"/"Latin America").
+LOCATIONS_LINKEDIN_REMOTO_APENAS = ["Argentina", "Chile", "México", "Colômbia", "Espanha", "Portugal"]
+
+# Mercado que a vaga remota precisa aceitar pra contar, quando o texto de
+# local DECLARA um escopo geográfico ("Remote — US only", "Remote — India").
+# Ver Job.escopo_remoto/RegrasFiltro.mercados_remoto_aceitos em job.py — sem
+# isso, uma vaga remota só pra outro país passava igual a uma remota de
+# verdade pro Brasil. Vaga remota SEM escopo declarado no texto (a grande
+# maioria) continua batendo normalmente, isso só filtra quando a fonte
+# EXPLICITA um mercado incompatível.
+#
+# "LATAM" cobre Argentina/Chile/México/Colômbia como guarda-chuva; Portugal
+# e Espanha entraram nominalmente (não tem guarda-chuva equivalente pra
+# Ibéria) — sem isso, uma vaga achada em LOCATIONS_LINKEDIN_REMOTO_APENAS
+# mas escopada "Remote — Portugal"/"Remote — Spain" seria rejeitada mesmo
+# sendo exatamente o tipo de vaga que essa expansão foi feita pra achar.
+# Vaga escopada só pro país específico que EXCLUI Brasil (ex: "Remote —
+# Argentina only") continua rejeitada, como deveria.
+MERCADOS_REMOTO_ACEITOS = ["Brasil", "LATAM", "Portugal", "Espanha"]
 
 INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 180))
 

@@ -9,7 +9,7 @@
 # principal (reaproveita o bot já configurado, e o dedup por link no mesmo
 # jobs.db não tem risco de colisão — o id é hash do link, e vaga
 # internacional nunca vai ter o mesmo link de uma vaga brasileira).
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DB_PATH  # noqa: F401
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DB_PATH, CIDADES_EUROPA_IBERICA  # noqa: F401
 
 # Cargo em múltiplos idiomas — vaga internacional pode ter o anúncio escrito
 # em inglês, português ou espanhol, dependendo de quem contratou.
@@ -23,6 +23,7 @@ KEYWORDS_INTL = [
     "Business Analyst",
     # Nomenclatura em espanhol
     "Analista de Datos",
+    "Analítica de Datos",
     "Analista de Inteligencia de Negocios",
     "Especialista en Datos",
     "Analista de Business Intelligence",
@@ -67,7 +68,32 @@ TERMOS_BUSCA_INTL = [
     "ai trainer portuguese speaker",
     "ai trainer spanish speaker",
     "remote data annotator latam",
+    # Termos "soltos" (idioma/mercado sem cargo emparelhado na própria
+    # busca) — diferente dos de cima, que sempre combinam cargo+idioma numa
+    # frase só. MEDIDO: zero ocorrência de "Spanish"/"Español"/"LATAM" como
+    # termo próprio no projeto — toda vaga que anuncia a vaga com o idioma
+    # em destaque ("Spanish Speaker — Data Analytics Role", "LATAM Remote
+    # Team") e não bate exatamente numa das frases combinadas acima ficava
+    # invisível pra busca. Não é o mesmo risco do comentário lá em cima
+    # (buscar só "data analyst" sozinho, sem NENHUM filtro de idioma) — aqui
+    # é o oposto, idioma sem cargo na busca, e o cargo continua sendo
+    # exigido depois por KEYWORDS_INTL antes de qualquer notificação.
+    "spanish speaker",
+    "spanish speaking",
+    "portuguese and spanish",
+    "spanish market",
+    "latam",
 ]
+
+# Rodízio de termos, mesmo mecanismo do TERMOS_POR_CICLO em config.py (ver
+# _proximo_bloco_termos em main.py) — só que com chave de metadados própria
+# (sufixo "_internacional"), pra não colidir com o rodízio do perfil BR.
+# Esse perfil nunca tinha rodízio antes de virar perfil de verdade (rodava a
+# lista de termos INTEIRA todo ciclo, sem custo controlado, e nem chegava a
+# rodar de fato — não estava no workflow do GitHub Actions). 27 termos x até
+# 6 países/domínios por fonte já é bastante busca; bloco de 10 mantém o
+# custo por ciclo parecido com o do perfil BR.
+TERMOS_POR_CICLO_INTL = 10
 
 # Mercados pesquisados por rodada de busca no LinkedIn (parâmetro location
 # do endpoint). Lista enxuta de propósito — cada país aqui multiplica o
@@ -110,26 +136,68 @@ LOCATIONS_INTL = [
 #
 CIDADES_INTL = ["Remote", "Remoto"]
 
-# CIDADES_EUROPA_IBERICA é o eixo separado pra isso, controlado por
-# ATIVAR_EIXO_IBERICO — dá pra desligar sem mexer no resto do pipeline
-# internacional (nem em CIDADES_INTL). Ligado por padrão: quando ativo,
-# vaga presencial/híbrida em Portugal/Espanha passa também, mas marcada
-# como "exploratória" na notificação (ver main_intl.py), pra distinguir de
-# vaga remota de verdade.
-ATIVAR_EIXO_IBERICO = True
-
-CIDADES_EUROPA_IBERICA = [
+# Ver MERCADOS_REMOTO_ACEITOS em config.py e Job.escopo_remoto/
+# extrair_escopo_remoto em job.py. Duas listas com propósito DIFERENTE,
+# mesma lógica de TERMOS_BUSCA/TERMOS_POR_CICLO vs KEYWORDS: LOCATIONS_INTL
+# é ONDE BUSCAR (custo real — cada país multiplica busca × termo, então fica
+# enxuto nos mercados que mais contratam); esta lista aqui é O QUE ACEITAR
+# (custo zero — só comparação de string), então cobre TODO país
+# hispanofalante/lusófono, não só os 6 de LOCATIONS_INTL. Precisa ser
+# abrangente porque desde que _mercado_correspondente() virou allowlist
+# estrita (ver job.py) — escopo declarado que não bate aqui é REJEITADO,
+# mesmo vindo de um país que o projeto quer aceitar, então faltar um país
+# aqui vira falso negativo (barra vaga boa), não falso positivo.
+#
+# NÃO inclui "Brasil" porque esse pipeline é justamente o de vaga remota
+# FORA do Brasil (main.py/PERFIL_BR já cobre o Brasil). Vaga "Remote — US
+# only"/"Remote — India"/"Remote — Vietnam" segue sendo rejeitada, agora
+# inclusive quando o país não está no dicionário de job.py (ver
+# MEDIDO em _mercado_correspondente).
+MERCADOS_REMOTO_ACEITOS_INTL = [
     "Portugal",
-    "Lisboa",
-    "Porto",
-    "Braga",
     "Espanha",
-    "España",
-    "Spain",
-    "Madrid",
-    "Barcelona",
-    "Valencia",
+    "México",
+    "Colômbia",
+    "Argentina",
+    "Chile",
+    "Peru",
+    "Uruguai",
+    "Paraguai",
+    "Bolívia",
+    "Equador",
+    "Venezuela",
+    "Costa Rica",
+    "Panamá",
+    "Guatemala",
+    "Honduras",
+    "El Salvador",
+    "Nicarágua",
+    "República Dominicana",
+    "Porto Rico",
+    "Cuba",
+    "Angola",
+    "Moçambique",
+    "Cabo Verde",
+    "LATAM",
 ]
+
+# Eixo separado pra isso, controlado por ATIVAR_EIXO_IBERICO — dá pra
+# desligar sem mexer no resto do pipeline internacional (nem em
+# CIDADES_INTL). Quando ativo, vaga presencial/híbrida em Portugal/Espanha
+# passa também, mas marcada como "exploratória" na notificação (ver
+# main_intl.py), pra distinguir de vaga remota de verdade.
+# CIDADES_EUROPA_IBERICA (a lista de cidades) mudou pra config.py — o
+# pipeline BR (main.py) passou a ter o mesmo eixo (ver ATIVAR_EIXO_IBERICO_BR
+# lá), e as duas listas eram idênticas, então centralizei numa só pra não
+# correr risco de uma mudar e a outra ficar pra trás. Esse toggle aqui
+# continua LOCAL e independente do ATIVAR_EIXO_IBERICO_BR — são eixos de
+# pipelines diferentes, cada um liga/desliga por conta própria.
+#
+# DESLIGADO: do mercado internacional, só interessa vaga remota — vaga
+# presencial/híbrida em Lisboa/Madrid não é o que o usuário quer, mesmo
+# achada de propósito via LOCATIONS_INTL. Continua fácil de religar depois
+# (só o toggle), sem apagar nada da lista/lógica.
+ATIVAR_EIXO_IBERICO = False
 
 # Indeed usa subdomínio por país, não parâmetro de location como o
 # LinkedIn. Confirmei ao vivo que es.indeed.com, pt.indeed.com e

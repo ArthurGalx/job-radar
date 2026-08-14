@@ -25,6 +25,19 @@ class LinkedInIntlScraper(BaseScraper):
 
     Mesmos avisos do LinkedIn normal: endpoint não documentado, sujeito a
     bloqueio/rate-limit sem aviso prévio.
+
+    Roda duas passadas por termo/país — mesma estrutura de scrapers/linkedin.py
+    (ver docstring de LinkedInScraper): uma nacional sem filtro de modalidade
+    (pega vaga presencial/híbrida, alimenta o eixo Ibérico quando ligado) e
+    outra com f_WT=2 (só vaga que o próprio LinkedIn marca como remota).
+    Antes só existia a nacional, e modalidade só era preenchida quando o
+    texto de local dizia "remote" organicamente — o que quase nunca
+    acontece (o card mostra a cidade onde a empresa está registrada, não a
+    modalidade), confirmado com o mesmo raciocínio que já motivou a segunda
+    passada no scraper nacional. Resultado medido: praticamente toda vaga
+    remota real vinha com modalidade vazia e era barrada por CIDADES_INTL
+    (que só aceita "Remote"/"Remoto"), deixando a fonte principal do
+    pipeline internacional muda pra REGRAS_INTL.
     """
 
     def __init__(self, termos_busca: list[str], locations: list[str]):
@@ -35,16 +48,18 @@ class LinkedInIntlScraper(BaseScraper):
         vagas: list[Job] = []
         for termo in self.termos_busca:
             for location in self.locations:
-                vagas.extend(self._buscar_termo(termo, location))
+                vagas.extend(self._buscar_termo(termo, location, remoto=False))
+                vagas.extend(self._buscar_termo(termo, location, remoto=True))
 
         logger.info(f"[LinkedIn Intl] {len(vagas)} vaga(s) encontrada(s) no total")
         return vagas
 
-    def _buscar_termo(self, termo: str, location: str) -> list[Job]:
-        logger.info(f"[LinkedIn Intl] Buscando: '{termo}' em {location}")
+    def _buscar_termo(self, termo: str, location: str, remoto: bool) -> list[Job]:
+        tag = f"{location}, remoto (f_WT=2)" if remoto else f"{location}, nacional"
+        logger.info(f"[LinkedIn Intl] Buscando ({tag}): {termo}")
         vagas: list[Job] = []
         termo_url = quote_plus(termo)
-        location_url = location.replace(" ", "+")
+        location_url = quote_plus(location)
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -58,9 +73,10 @@ class LinkedInIntlScraper(BaseScraper):
             try:
                 for pagina in range(MAX_PAGINAS):
                     start = pagina * 10
+                    filtro_wt = "&f_WT=2" if remoto else ""
                     url = (
                         "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-                        f"?keywords={termo_url}&location={location_url}&start={start}"
+                        f"?keywords={termo_url}&location={location_url}{filtro_wt}&start={start}"
                     )
                     page.goto(url, timeout=60000)
                     time.sleep(2)
@@ -69,8 +85,8 @@ class LinkedInIntlScraper(BaseScraper):
                     if not cards:
                         if pagina == 0:
                             logger.warning(
-                                f"[LinkedIn Intl] Nenhum resultado pra '{termo}' em "
-                                f"{location} — provável bloqueio/rate-limit ou 0 vaga real."
+                                f"[LinkedIn Intl] Nenhum resultado ({tag}) pra '{termo}' — "
+                                "provável bloqueio/rate-limit ou 0 vaga real."
                             )
                         break
 
@@ -87,12 +103,18 @@ class LinkedInIntlScraper(BaseScraper):
                             local_el = card.query_selector(".job-search-card__location")
                             local = local_el.inner_text().strip() if local_el else "Não informado"
 
-                            # Sem filtro nativo tipo f_WT=2 aqui (diferente do
-                            # linkedin.py nacional) — o único sinal de remoto é
-                            # o próprio texto de local, quando o card diz isso
-                            # organicamente ("Remote", "Remoto"). Detecta uma
-                            # vez aqui em vez de deixar pro filtro reparsear.
-                            modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
+                            # Passada com f_WT=2: o próprio LinkedIn já filtrou
+                            # por remoto, então força modalidade="Remoto" sem
+                            # depender do texto de local (que normalmente só
+                            # mostra a cidade onde a empresa está registrada,
+                            # nunca "Remote"/"Remoto" literalmente). Passada
+                            # nacional: sem filtro nativo, só resta a detecção
+                            # orgânica no texto (raramente bate, mas serve como
+                            # fallback pro eixo Ibérico quando religado).
+                            if remoto:
+                                modalidade = "Remoto"
+                            else:
+                                modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
 
                             link_el = card.query_selector("a.base-card__full-link")
                             link = link_el.get_attribute("href") if link_el else None

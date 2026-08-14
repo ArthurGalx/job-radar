@@ -13,25 +13,26 @@ def _normalizar(texto: str) -> str:
     return "".join(c for c in sem_acento if not unicodedata.combining(c))
 
 
-def _contem_termo(termo: str, texto: str) -> bool:
-    """Substring com borda de palavra (\\b), não substring cru.
+def _contem_termo(termo: str, texto: str, aceitar_plural: bool = False) -> bool:
+    """Substring com borda de palavra, não substring cru.
 
     "bi" solto como substring pegava qualquer palavra que contivesse "bi" no
-    meio — "bilíngue", "híbrido" (normalizado "hibrido"), "habilidade" etc.
-    Com \\b, "bi" só bate como palavra isolada, mas termos com espaço tipo
-    "power bi" continuam funcionando igual.
+    meio — "bilíngue", "híbrido" (normalizado "hibrido"), "habilidade",
+    "mo(bi)le", "am(bi)ente" etc. Com borda de palavra, "bi" só bate como
+    palavra isolada, mas termos com espaço tipo "power bi" continuam
+    funcionando igual.
+
+    Existiam duas versões praticamente idênticas disso (_contem_termo com
+    \\b e _tem_termo com (?<!\\w)/(?!\\w)) — as duas asserções de borda são
+    equivalentes na prática pra qualquer termo que comece/termine em
+    caractere de palavra (todo termo daqui é texto normal, então sempre é o
+    caso). A única diferença real era o `s?` opcional pra plural, que virou
+    o parâmetro `aceitar_plural` abaixo. Duas funções fazendo a mesma coisa
+    de formas ligeiramente diferentes era risco de uma mudar (ex: corrigir
+    um bug de borda) e a outra ficar pra trás, divergindo em silêncio.
     """
-    return re.search(rf"\b{re.escape(termo)}\b", texto) is not None
-
-
-def _tem_termo(termo: str, texto: str) -> bool:
-    """Casa o termo como palavra inteira (aceitando plural em -s).
-
-    Sem isso, termo curto casa dentro de outra palavra: "bi" casaria em
-    "mo(bi)le", "am(bi)ente" e "(bi)lingue", furando a regra que exige
-    qualificador de verdade no título.
-    """
-    return re.search(rf"(?<!\w){re.escape(termo)}s?(?!\w)", texto) is not None
+    sufixo = "s?" if aceitar_plural else ""
+    return re.search(rf"(?<!\w){re.escape(termo)}{sufixo}(?!\w)", texto) is not None
 
 
 # Vocabulário de "é vaga remota" usado no campo local. Antes só tinha
@@ -54,6 +55,334 @@ TERMOS_REMOTO = [
 
 def _e_remoto(texto: str) -> bool:
     return any(termo in texto for termo in TERMOS_REMOTO)
+
+
+# MEDIDO: "Remote — US only", "Remote — India", "Remote — Portugal" e
+# "Remote — Brazil only" passavam TODOS igual no filtro, porque _e_remoto()
+# só confirma que existe a raiz "remot" e para de ler ali — não olha o que
+# vem depois. "Remoto" não é uma categoria única: cada uma dessas vagas só
+# aceita candidato de um país/região específico, e sem separar isso o
+# sistema notifica vaga que o candidato nunca conseguiria assumir. Mapa
+# nome de mercado (normalizado, sem acento) -> nome canônico pra exibir/
+# comparar. Não é exaustivo de propósito — cobre os países já relevantes
+# pro projeto (LOCATIONS_INTL/DOMINIOS_INDEED_INTL) mais os mercados
+# medidos ao vivo (US, Índia) e alguns comuns o bastante pra valer a pena.
+_MERCADOS_REMOTO = {
+    "us": "Estados Unidos",
+    "usa": "Estados Unidos",
+    "u.s": "Estados Unidos",
+    "united states": "Estados Unidos",
+    "estados unidos": "Estados Unidos",
+    "eua": "Estados Unidos",
+    "uk": "Reino Unido",
+    "united kingdom": "Reino Unido",
+    "reino unido": "Reino Unido",
+    "india": "Índia",
+    "brazil": "Brasil",
+    "brasil": "Brasil",
+    "portugal": "Portugal",
+    "spain": "Espanha",
+    "espanha": "Espanha",
+    "espana": "Espanha",  # "España" já normalizado (sem ~) vira "espana"
+    "mexico": "México",
+    "colombia": "Colômbia",
+    "argentina": "Argentina",
+    "chile": "Chile",
+    "canada": "Canadá",
+    "germany": "Alemanha",
+    "alemanha": "Alemanha",
+    "latam": "LATAM",
+    "latin america": "LATAM",
+    "america latina": "LATAM",
+    "europe": "Europa",
+    "europa": "Europa",
+    "emea": "EMEA",
+    # Resto dos países hispanofalantes/lusófonos que MERCADOS_REMOTO_ACEITOS_INTL
+    # passou a aceitar — sem entrada aqui, "Remote - Peru"/"Remote - Uruguay"
+    # cai no mesmo "mercado não mapeado" que qualquer país não aceito (ver
+    # comentário em _mercado_correspondente), e nunca bateria contra a lista
+    # aceita mesmo sendo um país que o projeto quer aceitar.
+    "peru": "Peru",
+    "uruguay": "Uruguai",
+    "uruguai": "Uruguai",
+    "paraguay": "Paraguai",
+    "paraguai": "Paraguai",
+    "bolivia": "Bolívia",
+    "ecuador": "Equador",
+    "equador": "Equador",
+    "venezuela": "Venezuela",
+    "costa rica": "Costa Rica",
+    "panama": "Panamá",
+    "guatemala": "Guatemala",
+    "honduras": "Honduras",
+    "el salvador": "El Salvador",
+    "nicaragua": "Nicarágua",
+    "dominican republic": "República Dominicana",
+    "republica dominicana": "República Dominicana",
+    "puerto rico": "Porto Rico",
+    "porto rico": "Porto Rico",
+    "cuba": "Cuba",
+    "angola": "Angola",
+    "mozambique": "Moçambique",
+    "mocambique": "Moçambique",
+    "cape verde": "Cabo Verde",
+    "cabo verde": "Cabo Verde",
+}
+
+# MEDIDO: "Remoto (Porto Alegre, RS)" e "Remoto (Santiago do Cacém)"
+# viravam Portugal/Chile — a chave "porto" batia via \bporto\b dentro de
+# "porto alegre" (busca por substring/palavra do _mercado_correspondente),
+# e "santiago" batia dentro de "santiago do cacem" pelo mesmo motivo.
+# Nome de cidade curto e comum É um pedaço válido de outro nome de lugar
+# bem mais vezes do que nome de país (nenhum país se chama só "porto" ou
+# "santiago" por acaso, mas MUITA cidade brasileira/portuguesa começa
+# assim). Por isso cidade não entra em _MERCADOS_REMOTO (busca por
+# substring, adequada pra nome de país inteiro) — fica num dicionário
+# separado, casado por IGUALDADE do candidato inteiro (ver
+# extrair_escopo_remoto), não por substring. "Remoto (Porto Alegre, RS)"
+# nem chega aqui: a sigla "RS" já resolve Brasil antes (ver
+# _SIGLAS_UF_BRASIL). Isso só entra em jogo quando NÃO há sigla/país
+# junto do nome — ex: "Remoto (Lisboa)" sozinho.
+#
+# Ainda existe ambiguidade entre PAÍSES diferentes pro mesmo nome de
+# cidade (Valencia existe na Espanha E na Venezuela; Córdoba na Argentina
+# E na Espanha; San José é capital da Costa Rica mas também cidade nos
+# EUA) — sem base geográfica de verdade não dá pra resolver isso com
+# certeza; a escolha abaixo é a leitura mais provável dado o escopo do
+# projeto (mercado hispanofalante/lusófono), não uma garantia.
+_CIDADES_MERCADO = {
+    "lisboa": "Portugal",
+    "porto": "Portugal",
+    "madrid": "Espanha",
+    "barcelona": "Espanha",
+    "valencia": "Espanha",
+    "cidade do mexico": "México",
+    "ciudad de mexico": "México",
+    "guadalajara": "México",
+    "monterrey": "México",
+    "bogota": "Colômbia",
+    "medellin": "Colômbia",
+    "buenos aires": "Argentina",
+    "cordoba": "Argentina",
+    "santiago": "Chile",
+    "lima": "Peru",
+    "montevideu": "Uruguai",
+    "montevideo": "Uruguai",
+    "assuncao": "Paraguai",
+    "asuncion": "Paraguai",
+    "la paz": "Bolívia",
+    "santa cruz de la sierra": "Bolívia",
+    "quito": "Equador",
+    "guayaquil": "Equador",
+    "caracas": "Venezuela",
+    "san jose": "Costa Rica",
+    "cidade do panama": "Panamá",
+    "panama city": "Panamá",
+    "cidade da guatemala": "Guatemala",
+    "guatemala city": "Guatemala",
+    "tegucigalpa": "Honduras",
+    "san salvador": "El Salvador",
+    "managua": "Nicarágua",
+    "santo domingo": "República Dominicana",
+    "san juan": "Porto Rico",
+    "havana": "Cuba",
+    "havanna": "Cuba",
+    "luanda": "Angola",
+    "maputo": "Moçambique",
+    "praia": "Cabo Verde",
+}
+
+# Termos que aparecem depois de "remote" mas NÃO restringem geografia —
+# "Remote (Anywhere)"/"Remote - Worldwide" é remoto sem escopo nenhum,
+# equivalente a não achar mercado nenhum (retorna "").
+_MERCADOS_SEM_RESTRICAO = {"anywhere", "worldwide", "global"}
+
+# Palavras de apoio que aparecem junto do nome do mercado mas não fazem
+# parte dele — "US only", "Brazil based", "US timezone" — removidas antes de
+# tentar casar contra _MERCADOS_REMOTO, senão "us only" nunca bateria com a
+# chave "us".
+_PALAVRAS_IGNORAR_ESCOPO = {
+    "only", "based", "timezone", "timezones", "time", "zone", "zones",
+    "somente", "apenas",
+}
+
+# Palavras em português que indicam descrição de ABRANGÊNCIA dentro do
+# Brasil, não nome de país — ex: "Remoto (Barueri + 35 cidades)" (visto ao
+# vivo em jobs.db). Sem essa lista, esse tipo de vaga nacional virava
+# "escopo declarado mas não reconhecido" e era barrada pela mesma lógica
+# que bloqueia país estrangeiro fora da lista aceita (ver
+# extrair_escopo_remoto). Só cobre vocabulário em PORTUGUÊS de propósito —
+# o equivalente em inglês ("area", "metropolitan", "county", "metro") é
+# exatamente o sinal real de vaga americana sem sigla de estado explícita
+# (ex: "Remote (Greater Seattle Area)", "Remote (Dallas-Fort Worth
+# Metroplex)") e esse caso PRECISA continuar caindo em "não reconhecido" —
+# tratá-lo como sem restrição reabriria o vazamento de vaga americana que
+# esse fix inteiro existe pra fechar.
+_PALAVRAS_REGIAO_BR = {"cidade", "cidades", "regiao", "distrito", "condado"}
+
+# Separador entre a raiz "remot..." e o texto de escopo que vem depois:
+# travessão/hífen ("Remote — US only", "Remote - India"), vírgula ("Remote,
+# United States") ou parênteses ("Remote (Brazil only)"). Sem nenhum desses
+# logo após "remot", não tem escopo textual pra ler (ex: "Remote" sozinho,
+# ou "Remoto" sem complemento) — trata como sem restrição.
+_PADRAO_ESCOPO_SEPARADOR = re.compile(r"remot[eoa]\w*\s*[–—\-,(:]+\s*")
+
+# MEDIDO em produção (jobs.db, fonte LinkedIn): 246 de 269 notificações
+# (91%) vieram no formato "Remoto (Cidade, SIGLA)" — ex: "Remoto (New York,
+# NY)", "Remoto (Austin, TX)", "Remoto (Seattle, WA)". Nenhuma batia em
+# _MERCADOS_REMOTO porque esse dicionário só reconhece NOME DE PAÍS
+# ("us"/"united states"/...), nunca sigla de estado — e o texto real do
+# LinkedIn pra vaga remota americana quase nunca escreve "United States"
+# por extenso, só a cidade-âncora + sigla de 2 letras do estado. Resultado:
+# toda essa vaga passava como "remoto sem escopo declarado" (comportamento
+# correto só quando de fato não há como saber o mercado) mesmo sendo
+# claramente uma vaga americana — driblava MERCADOS_REMOTO_ACEITOS por
+# completo. Lista das 50 siglas + DC.
+_SIGLAS_ESTADOS_EUA = {
+    "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi", "id",
+    "il", "in", "ia", "ks", "ky", "la", "me", "md", "ma", "mi", "mn", "ms",
+    "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc", "nd", "oh", "ok",
+    "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv",
+    "wi", "wy", "dc",
+}
+
+# MEDIDO: "Remoto (Maceió, AL)", "Remoto (Belém, PA)", "Remoto (Florianópolis,
+# SC)", "Remoto (Cuiabá, MT)", "Remoto (São Luís, MA)", "Remoto (Campo
+# Grande, MS)" — as 27 UFs brasileiras usam sigla de 2 letras igual ao
+# estado americano, e 6 delas colidem literalmente com uma sigla dos EUA
+# (AL/Alabama, MA/Massachusetts, MT/Montana, MS/Mississippi, PA/Pennsylvania,
+# SC/South Carolina). Sem desambiguar, toda vaga remota numa capital
+# brasileira com sigla ambígua virava "Estados Unidos" e era barrada — o
+# mesmo bug que motivou o fix de _SIGLAS_ESTADOS_EUA, só que na direção
+# oposta.
+#
+# Todas as 27 siglas de UF, não só as ambíguas — cidade brasileira fora do
+# Nordeste (Rio de Janeiro/RJ, São Paulo/SP...) também não tinha como bater
+# em _MERCADOS_REMOTO nem na rede de segurança de CIDADES (que é só
+# Nordeste, feita pra vaga presencial/híbrida, não pensada pra cobrir
+# escopo de vaga remota do Brasil inteiro).
+_SIGLAS_UF_BRASIL = {
+    "ac", "al", "ap", "am", "ba", "ce", "df", "es", "go", "ma", "mt", "ms",
+    "mg", "pa", "pb", "pr", "pe", "pi", "rj", "rn", "rs", "ro", "rr", "sc",
+    "sp", "se", "to",
+}
+
+# As 6 siglas que colidem com estado americano — só nessas precisa olhar o
+# nome da cidade antes de decidir Brasil vs EUA. Sigla de UF que não colide
+# (RJ, SP, PE...) já resolve sozinha, nenhum estado americano usa essas.
+_SIGLAS_UF_AMBIGUAS = {"al", "ma", "mt", "ms", "pa", "sc"}
+
+# Capital de cada estado brasileiro (+DF), normalizado — usado só pra
+# desambiguar as 6 siglas acima. Cobre exatamente o formato que o LinkedIn
+# mostra pra vaga remota brasileira ("Remoto (Capital, UF)"), sem precisar
+# de uma base de cidade completa.
+_CAPITAIS_BRASIL = {
+    "rio branco", "maceio", "macapa", "manaus", "salvador", "fortaleza",
+    "brasilia", "vitoria", "goiania", "sao luis", "cuiaba", "campo grande",
+    "belo horizonte", "belem", "joao pessoa", "curitiba", "recife",
+    "teresina", "rio de janeiro", "natal", "porto alegre", "porto velho",
+    "boa vista", "florianopolis", "sao paulo", "aracaju", "palmas",
+}
+
+
+def _mercado_correspondente(candidato: str) -> str:
+    if not candidato or candidato in _MERCADOS_SEM_RESTRICAO:
+        return ""
+    # Chaves mais longas primeiro ("united states" antes de tentar algo
+    # menor que pudesse colidir), casando como palavra/frase inteira — não
+    # substring crua, mesmo motivo do _contem_termo lá em cima.
+    for chave in sorted(_MERCADOS_REMOTO, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(chave)}\b", candidato):
+            return _MERCADOS_REMOTO[chave]
+    # MEDIDO: filtro de mercado era blocklist disfarçada de allowlist —
+    # país fora do dicionário (Vietnã, Nigéria, Polônia, Filipinas...)
+    # devolvia "" aqui, e "" é tratado por extrair_escopo_remoto/combina_com
+    # como "sem restrição declarada", ou seja, PASSAVA pelo mesmo motivo que
+    # país aceito passava. Devolve o candidato bruto em vez de "" — não-vazio
+    # sinaliza "escopo foi declarado no texto, só não está mapeado", o que
+    # combina_com() agora trata como reprovado quando não bate a lista
+    # aceita (ver RegrasFiltro.mercados_remoto_aceitos). "" continua
+    # reservado só pra quando NÃO HÁ texto de escopo nenhum (ver
+    # extrair_escopo_remoto) ou pra "Anywhere"/"Worldwide" explícito acima.
+    return candidato
+
+
+def extrair_escopo_remoto(texto_local: str) -> str:
+    """Deriva o mercado geográfico de uma vaga remota a partir do texto de
+    `local`, quando a fonte expõe isso ali (ex: "Remote — US only", "Remote,
+    Brazil"). Retorna o nome canônico do mercado ("Estados Unidos", "Índia",
+    "Brasil"...), o texto bruto do candidato quando um escopo FOI declarado
+    mas não bate em nenhum país conhecido (ex: "Remote - Vietnam" -> "vietnam"
+    literal), ou "" só quando não há NENHUM texto de escopo pra ler (remoto
+    "puro", sem qualificador nenhum, ou "Anywhere"/"Worldwide" explícito).
+
+    "" e "escopo desconhecido" são sinais DIFERENTES pra combina_com(): ""
+    é "sem restrição, aceita" (não tem base nenhuma pra rejeitar); qualquer
+    outro valor não-vazio que não esteja em mercados_remoto_aceitos é
+    rejeitado, mesmo quando esse valor é um país que o dicionário não
+    reconhece — ver _mercado_correspondente.
+    """
+    texto_norm = _normalizar(texto_local)
+    m = _PADRAO_ESCOPO_SEPARADOR.search(texto_norm)
+    if not m:
+        return ""
+
+    resto = texto_norm[m.end():]
+    resto = re.split(r"[)\n]", resto)[0]
+
+    # Formato "Cidade, SIGLA" (ex: "new york, ny") — a sigla de estado
+    # depois da vírgula é o sinal de mercado aqui, não o nome da cidade
+    # antes dela. Checa todo segmento separado por vírgula que NÃO seja o
+    # primeiro (o primeiro é sempre a cidade nesse formato, nunca a sigla)
+    # — ver comentário de _SIGLAS_ESTADOS_EUA acima.
+    segmentos = [s.strip(" .") for s in resto.split(",")]
+    cidade = segmentos[0] if segmentos else ""
+    for seg in segmentos[1:]:
+        # UF brasileira primeiro: só as 6 ambíguas (colidem com sigla dos
+        # EUA) precisam confirmar pela cidade — ver _SIGLAS_UF_AMBIGUAS.
+        # UF que não colide (RJ, SP, PE...) já resolve sozinha.
+        if seg in _SIGLAS_UF_BRASIL:
+            if seg not in _SIGLAS_UF_AMBIGUAS or cidade in _CAPITAIS_BRASIL:
+                return "Brasil"
+        if seg in _SIGLAS_ESTADOS_EUA:
+            return "Estados Unidos"
+
+    # Nome de mercado por extenso também pode vir DEPOIS da cidade, não só
+    # antes ("Florida, United States" — cortar no primeiro segmento, como
+    # antes, jogava fora justamente o "United States" e devolvia "Florida",
+    # que não bate em nenhuma chave de _MERCADOS_REMOTO). Substitui a
+    # vírgula por espaço em vez de cortar, mantendo os segmentos na ordem
+    # original — _mercado_correspondente já faz busca por substring com
+    # borda de palavra, então acha o nome do mercado em qualquer posição.
+    palavras = [
+        p.strip(".") for p in resto.replace(",", " ").split()
+        if p.strip(".") not in _PALAVRAS_IGNORAR_ESCOPO
+    ]
+    candidato = " ".join(palavras).strip()
+
+    if not candidato:
+        return ""
+
+    # "Barueri + 35 cidades" é abrangência DENTRO do Brasil, não nome de
+    # país estrangeiro — ver _PALAVRAS_REGIAO_BR. Sai como "" (sem
+    # restrição) antes de chegar no fallback de "escopo desconhecido" de
+    # _mercado_correspondente, que rejeitaria isso pelo motivo errado.
+    if any(p in _PALAVRAS_REGIAO_BR for p in candidato.split()):
+        return ""
+
+    # Cidade sozinha, sem sigla/país junto (ex: "Remoto (Porto Alegre)",
+    # "Remoto (Lisboa)") — casamento por IGUALDADE do candidato inteiro,
+    # não substring (ver comentário de _CIDADES_MERCADO acima pro motivo).
+    # Capital brasileira primeiro: cobre "Porto Alegre"/"Porto Velho" sem
+    # UF junto, que sem isso cairiam direto em _CIDADES_MERCADO e virariam
+    # Portugal via "porto" — aqui o candidato já é a cidade inteira, então
+    # não tem esse risco de substring.
+    if candidato in _CAPITAIS_BRASIL:
+        return "Brasil"
+    if candidato in _CIDADES_MERCADO:
+        return _CIDADES_MERCADO[candidato]
+
+    return _mercado_correspondente(candidato)
 
 
 # Padrões de data confirmados ao vivo neste projeto: "Publicada em 11/08"
@@ -127,6 +456,36 @@ def _detectar_senioridade(titulo: str) -> str:
 
 
 @dataclass
+class RegrasFiltro:
+    """Agrupa as 6 regras que Job.combina_com() usa pra decidir se uma vaga
+    bate ou não. Antes eram 6 parâmetros posicionais soltos, atravessando
+    job.py -> utils/filtro.py -> main.py/main_intl.py — cada regra nova
+    (já foram 6: forte, ambíguo, qualificador de dados, ferramenta,
+    qualificador de cargo, cidade) alongava a lista de posições, e trocar a
+    ordem de dois argumentos do mesmo tipo (duas list[str] quaisquer) não dá
+    erro nenhum, só passa a filtrar errado em silêncio — nada no Python
+    detecta isso, já que todos os parâmetros têm o mesmo tipo. Um objeto
+    único com nome em cada campo elimina esse risco: a ordem da CHAMADA
+    deixa de importar (kwargs/atributos nomeados), e esquecer um campo vira
+    TypeError na hora (dataclass sem default nos campos obrigatórios), não
+    filtro errado descoberto só depois.
+    """
+    keywords_forte: list[str]
+    keywords_ambiguo: list[str]
+    qualificadores_dados: list[str]
+    ferramentas_titulo: list[str]
+    qualificadores_cargo: list[str]
+    cidades: list[str]
+    # Mercados aceitos pra vaga remota COM escopo geográfico explícito no
+    # texto (ver Job.escopo_remoto/extrair_escopo_remoto). None = não checa
+    # escopo nenhum (aceita qualquer remoto, comportamento de antes desse
+    # campo existir — default seguro pra quem ainda não configurou isso).
+    # Lista vazia é diferente de None: significa "só aceita remoto SEM
+    # escopo declarado", rejeitando todo mercado explícito.
+    mercados_remoto_aceitos: list[str] | None = None
+
+
+@dataclass
 class Job:
     titulo: str
     empresa: str
@@ -191,15 +550,17 @@ class Job:
         """
         return _detectar_senioridade(self.titulo)
 
-    def combina_com(
-        self,
-        keywords_forte: list[str],
-        keywords_ambiguo: list[str],
-        qualificadores_dados: list[str],
-        ferramentas_titulo: list[str],
-        qualificadores_cargo: list[str],
-        cidades: list[str],
-    ) -> bool:
+    @property
+    def escopo_remoto(self) -> str:
+        """Mercado geográfico da vaga remota (Estados Unidos/Índia/Brasil/...),
+        derivado do texto de `local` — ver extrair_escopo_remoto(). "" quando
+        o texto não declara restrição nenhuma (remoto "puro", ou vaga que
+        nem é remota). Só informativo por si só; combina_com() é quem decide
+        se rejeita com base em RegrasFiltro.mercados_remoto_aceitos.
+        """
+        return extrair_escopo_remoto(self.local)
+
+    def combina_com(self, regras: RegrasFiltro) -> bool:
         """Verifica se a vaga bate com pelo menos uma keyword E uma cidade/modalidade.
 
         Cargo e localização são checados em campos separados (título e local,
@@ -228,16 +589,24 @@ class Job:
         local_norm = _normalizar(self.local)
         modalidade_norm = _normalizar(self.modalidade)
 
-        bate_forte = any(_contem_termo(_normalizar(k), titulo_norm) for k in keywords_forte)
+        bate_forte = any(
+            _contem_termo(_normalizar(k), titulo_norm) for k in regras.keywords_forte
+        )
 
-        bate_ambiguo = any(_normalizar(k) in titulo_norm for k in keywords_ambiguo) and any(
-            _tem_termo(_normalizar(q), titulo_norm) for q in qualificadores_dados
+        bate_ambiguo = any(
+            _normalizar(k) in titulo_norm for k in regras.keywords_ambiguo
+        ) and any(
+            _contem_termo(_normalizar(q), titulo_norm, aceitar_plural=True)
+            for q in regras.qualificadores_dados
         )
 
         # Espelho da regra acima: ferramenta no título só vale com cargo junto.
         bate_ferramenta = any(
-            _normalizar(f) in titulo_norm for f in ferramentas_titulo
-        ) and any(_tem_termo(_normalizar(q), titulo_norm) for q in qualificadores_cargo)
+            _normalizar(f) in titulo_norm for f in regras.ferramentas_titulo
+        ) and any(
+            _contem_termo(_normalizar(q), titulo_norm, aceitar_plural=True)
+            for q in regras.qualificadores_cargo
+        )
 
         bate_keyword = bate_forte or bate_ambiguo or bate_ferramenta
 
@@ -246,13 +615,42 @@ class Job:
         # vez pra mesma vaga, no pipeline internacional). Agora o scraper
         # já classifica a modalidade uma vez, na extração, e aqui só se lê o
         # campo — sem reparsear texto.
-        quer_remoto = any(_normalizar(c) in ("remoto", "remota") for c in cidades)
+        #
+        # "remote" (inglês) entra aqui também: CIDADES_INTL usa ["Remote",
+        # "Remoto"] pras duas grafias. Sem incluir "remote" nesse conjunto,
+        # ele caía no branch de cidade normal abaixo (bate_cidade por
+        # substring cru em local_norm) — que sempre batia, porque o texto de
+        # local de vaga remota internacional quase sempre contém a palavra
+        # "remote" literalmente. Isso ignorava completamente o campo
+        # modalidade E o filtro de mercado (escopo) logo abaixo: bastava o
+        # texto conter "remote" que passava, mesmo pra vaga só remota nos
+        # EUA. Tratando "remote" como flag de remoto (igual "remoto"), ele
+        # passa pelo mesmo caminho de bate_remoto/escopo que "remoto" já
+        # passava, em vez de furar o filtro por um atalho.
+        _FLAGS_REMOTO = ("remoto", "remota", "remote")
+        quer_remoto = any(_normalizar(c) in _FLAGS_REMOTO for c in regras.cidades)
         bate_remoto = quer_remoto and modalidade_norm in ("remoto", "remota")
+
+        # MEDIDO: "Remote — US only", "Remote — India", "Remote — Portugal" e
+        # "Remote — Brazil only" passavam todos igual, porque até aqui só
+        # importava SE era remoto, nunca PRA QUEM. Quando a config define
+        # mercados_remoto_aceitos, uma vaga remota com escopo geográfico
+        # explícito no texto só bate se esse mercado estiver na lista aceita
+        # — vaga remota SEM escopo declarado (texto não diz "US only" nem
+        # nada parecido) continua batendo normalmente, porque não tem base
+        # nenhuma pra rejeitar. None (default) mantém o comportamento de
+        # antes: aceita qualquer remoto, sem checar mercado.
+        if bate_remoto and regras.mercados_remoto_aceitos is not None:
+            escopo = self.escopo_remoto
+            if escopo:
+                mercados_aceitos_norm = {_normalizar(m) for m in regras.mercados_remoto_aceitos}
+                if _normalizar(escopo) not in mercados_aceitos_norm:
+                    bate_remoto = False
 
         bate_cidade = bate_remoto or any(
             _contem_termo(_normalizar(c), local_norm)
-            for c in cidades
-            if _normalizar(c) not in ("remoto", "remota")
+            for c in regras.cidades
+            if _normalizar(c) not in _FLAGS_REMOTO
         )
 
         return bate_keyword and bate_cidade

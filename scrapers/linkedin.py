@@ -4,6 +4,7 @@ from urllib.parse import quote_plus
 
 from playwright.sync_api import sync_playwright
 
+from config import LOCATIONS_LINKEDIN, LOCATIONS_LINKEDIN_REMOTO_APENAS
 from job import Job, _e_remoto, _normalizar, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
@@ -39,35 +40,73 @@ class LinkedInScraper(BaseScraper):
     principalmente vindos de IPs de nuvem/datacenter, como os do GitHub
     Actions. Não é possível garantir estabilidade a longo prazo.
 
-    Roda duas passadas por termo: uma nacional sem filtro de modalidade
-    (pega vaga presencial/híbrida em cidade específica, cobre Recife/Natal/
-    Maceió etc.) e outra com f_WT=2 (só vaga que o próprio LinkedIn marca
-    como remota). Essa segunda marca o campo `modalidade` como "Remoto"
-    diretamente (o próprio LinkedIn já garante isso), porque o card nunca
-    expõe isso sozinho em texto (ver MAX_PAGINAS_REMOTO acima) — `local`
-    fica só com a cidade que o card mostra, mesmo pra vaga remota.
+    Roda duas passadas por termo (e por mercado, ver `locations` abaixo):
+    uma nacional sem filtro de modalidade (pega vaga presencial/híbrida em
+    cidade específica, cobre Recife/Natal/Maceió etc.) e outra com f_WT=2
+    (só vaga que o próprio LinkedIn marca como remota). Essa segunda marca o
+    campo `modalidade` como "Remoto" diretamente (o próprio LinkedIn já
+    garante isso), porque o card nunca expõe isso sozinho em texto (ver
+    MAX_PAGINAS_REMOTO acima) — `local` fica só com a cidade que o card
+    mostra, mesmo pra vaga remota.
+
+    `locations`: LinkedIn é a única fonte deste pipeline com alcance fora do
+    Brasil — as outras são portais brasileiros. Antes ficava fixo em
+    location=Brasil, então essa porta pra fora nunca era usada. Roda as DUAS
+    passadas (nacional + remoto) só pra `locations` — o mercado "casa", onde
+    vaga presencial/híbrida faz sentido.
+
+    `locations_remoto_apenas`: mercado adicional onde só interessa vaga
+    REMOTA — o usuário não mora lá, então presencial/híbrida de lá não
+    serve, e rodar essa passada seria só custo sem retorno (o resultado
+    nunca bateria em CIDADES, que é só cidade brasileira). Roda só a passada
+    f_WT=2 pra esses países.
+
+    Cada país em qualquer uma das duas listas multiplica o número de buscas
+    — defaults (ver LOCATIONS_LINKEDIN/LOCATIONS_LINKEDIN_REMOTO_APENAS em
+    config.py) começam enxutos de propósito.
     """
 
-    def __init__(self, termos_busca: list[str]):
+    def __init__(
+        self,
+        termos_busca: list[str],
+        locations: list[str] | None = None,
+        locations_remoto_apenas: list[str] | None = None,
+    ):
         self.termos_busca = termos_busca
+        self.locations = locations if locations is not None else LOCATIONS_LINKEDIN
+        self.locations_remoto_apenas = (
+            locations_remoto_apenas
+            if locations_remoto_apenas is not None
+            else LOCATIONS_LINKEDIN_REMOTO_APENAS
+        )
 
     def buscar_vagas(self) -> list[Job]:
         vagas: list[Job] = []
         for termo in self.termos_busca:
-            vagas.extend(self._buscar_termo(termo, remoto=False))
-            vagas.extend(self._buscar_termo(termo, remoto=True))
+            for location in self.locations:
+                vagas.extend(self._buscar_termo(termo, location, remoto=False))
+                vagas.extend(self._buscar_termo(termo, location, remoto=True))
+            for location in self.locations_remoto_apenas:
+                vagas.extend(self._buscar_termo(termo, location, remoto=True))
 
-        logger.info(f"[LinkedIn] {len(vagas)} vaga(s) encontrada(s) no total")
+        total_mercados = len(self.locations) + len(self.locations_remoto_apenas)
+        logger.info(
+            f"[LinkedIn] {len(vagas)} vaga(s) encontrada(s) no total "
+            f"({total_mercados} mercado(s): {', '.join(self.locations)} [completo] + "
+            f"{', '.join(self.locations_remoto_apenas)} [remoto apenas])"
+        )
         return vagas
 
-    def _buscar_termo(self, termo: str, remoto: bool) -> list[Job]:
-        tag = "remoto (f_WT=2)" if remoto else "nacional"
+    def _buscar_termo(self, termo: str, location: str, remoto: bool) -> list[Job]:
+        tag = f"{location}, remoto (f_WT=2)" if remoto else f"{location}, nacional"
         logger.info(f"[LinkedIn] Buscando ({tag}): {termo}")
         vagas: list[Job] = []
-        # quote_plus em vez de .replace(" ", "+") manual: termo pode ter "&"
-        # (ex: "BI & Analytics Analyst"), que sem escapar quebra a query
-        # string no meio e corrompe a busca silenciosamente.
+        # quote_plus em vez de .replace(" ", "+") manual: termo (ou location)
+        # pode ter "&" ou acento (ex: "BI & Analytics Analyst", "México"),
+        # que sem escapar quebra a query string no meio e corrompe a busca
+        # silenciosamente.
         termo_url = quote_plus(termo)
+        location_url = quote_plus(location)
         max_paginas = MAX_PAGINAS_REMOTO if remoto else MAX_PAGINAS
 
         with sync_playwright() as p:
@@ -85,7 +124,7 @@ class LinkedInScraper(BaseScraper):
                     filtro_wt = "&f_WT=2" if remoto else ""
                     url = (
                         "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-                        f"?keywords={termo_url}&location=Brasil{filtro_wt}&start={start}"
+                        f"?keywords={termo_url}&location={location_url}{filtro_wt}&start={start}"
                     )
                     page.goto(url, timeout=60000)
                     time.sleep(2)
