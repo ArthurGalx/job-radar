@@ -227,14 +227,19 @@ LOCATIONS_LINKEDIN_REMOTO_APENAS = ["Argentina", "Chile", "México", "Colômbia"
 # maioria) continua batendo normalmente, isso só filtra quando a fonte
 # EXPLICITA um mercado incompatível.
 #
-# "LATAM" cobre Argentina/Chile/México/Colômbia como guarda-chuva; Portugal
-# e Espanha entraram nominalmente (não tem guarda-chuva equivalente pra
-# Ibéria) — sem isso, uma vaga achada em LOCATIONS_LINKEDIN_REMOTO_APENAS
-# mas escopada "Remote — Portugal"/"Remote — Spain" seria rejeitada mesmo
-# sendo exatamente o tipo de vaga que essa expansão foi feita pra achar.
-# Vaga escopada só pro país específico que EXCLUI Brasil (ex: "Remote —
-# Argentina only") continua rejeitada, como deveria.
-MERCADOS_REMOTO_ACEITOS = ["Brasil", "LATAM", "Portugal", "Espanha"]
+# MEDIDO: Argentina/Chile/México/Colômbia ENTRAM nominalmente agora — a
+# suposição de que "LATAM" cobria os quatro como guarda-chuva só valia
+# enquanto extrair_escopo_remoto resolvia o texto pra "LATAM" literal.
+# Depois que passou a reconhecer cidade (Buenos Aires/Santiago/Cidade do
+# México/Bogotá — ver _CIDADES_MERCADO em job.py), o escopo passou a
+# resolver pro PAÍS específico, não mais pro guarda-chuva — e o país
+# específico nunca esteve nessa lista. Resultado: LOCATIONS_LINKEDIN_
+# REMOTO_APENAS pagava o custo de buscar nesses 4 países e o filtro
+# descartava tudo que a busca trazia de lá. "LATAM" continua na lista pra
+# quando o texto disser isso literalmente (guarda-chuva de verdade, não
+# substituto de nome de país). Portugal e Espanha entraram nominalmente
+# pelo mesmo motivo, desde antes.
+MERCADOS_REMOTO_ACEITOS = ["Brasil", "LATAM", "Argentina", "Chile", "México", "Colômbia", "Portugal", "Espanha"]
 
 INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 180))
 
