@@ -25,8 +25,27 @@ def enviar_mensagem(texto: str) -> bool:
         resposta = requests.post(url, data=payload, timeout=10)
         resposta.raise_for_status()
         return True
+    # MEDIDO: logar a exceção direta (`{e}`) põe a URL inteira no log —
+    # `url` tem o token embutido (bot{TOKEN}/sendMessage), e a mensagem
+    # padrão de erro de conexão do requests/urllib3 (ProxyError,
+    # ConnectionError...) inclui a URL completa que falhou. 6 ocorrências
+    # reais em jobradar.log confirmaram o vazamento: arquivo é gitignored
+    # (não vai pro repo) mas existe em disco e o GitHub Actions manda a
+    # mesma mensagem pro stdout do job, visível em log de execução. HTTPError
+    # (erro de resposta, ex: 401/403 do próprio Telegram) tem `.response`
+    # com status e motivo, sem token nenhum — loga isso. Qualquer outra
+    # RequestException (falha de conexão, nunca chegou a ter resposta) loga
+    # só o tipo da exceção — nunca `str(e)`, nunca `url`.
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response is not None else None
+        motivo = e.response.reason if e.response is not None else "sem detalhe"
+        logger.error(f"Erro ao enviar mensagem no Telegram: HTTP {status} ({motivo})")
+        return False
     except requests.RequestException as e:
-        logger.error(f"Erro ao enviar mensagem no Telegram: {e}")
+        logger.error(
+            f"Erro ao enviar mensagem no Telegram: {type(e).__name__} "
+            "(falha de conexão, sem resposta do servidor)"
+        )
         return False
 
 
