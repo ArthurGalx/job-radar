@@ -285,42 +285,66 @@ _CAPITAIS_BRASIL = {
 }
 
 
-def _mercado_correspondente(candidato: str) -> str:
+def _mercados_correspondentes(candidato: str) -> set[str]:
+    """Devolve TODOS os mercados que o candidato menciona, não só o
+    primeiro.
+
+    MEDIDO: "Remote - Brazil/LATAM" e "Remote - LATAM + Brazil" resolviam
+    pra um único mercado ("Brasil"), porque a versão antiga (chamada
+    _mercado_correspondente) parava no primeiro match — e a ordem de busca
+    era por tamanho de chave ("brazil", 6 letras, antes de "latam", 5),
+    não pela ordem em que os mercados aparecem no texto. Vaga aberta pra
+    LATAM inteira (que o perfil internacional aceita) virava só "Brasil"
+    (que ele rejeita de propósito), e a vaga se perdia mesmo sendo válida.
+    Agora coleta todo mercado que aparece no texto — combina_com() aprova
+    se qualquer um bater na lista aceita.
+    """
     if not candidato or candidato in _MERCADOS_SEM_RESTRICAO:
-        return ""
-    # Chaves mais longas primeiro ("united states" antes de tentar algo
-    # menor que pudesse colidir), casando como palavra/frase inteira — não
-    # substring crua, mesmo motivo do _contem_termo lá em cima.
-    for chave in sorted(_MERCADOS_REMOTO, key=len, reverse=True):
-        if re.search(rf"\b{re.escape(chave)}\b", candidato):
-            return _MERCADOS_REMOTO[chave]
+        return set()
+    encontrados = {
+        nome for chave, nome in _MERCADOS_REMOTO.items()
+        if re.search(rf"\b{re.escape(chave)}\b", candidato)
+    }
+    if encontrados:
+        return encontrados
     # MEDIDO: filtro de mercado era blocklist disfarçada de allowlist —
     # país fora do dicionário (Vietnã, Nigéria, Polônia, Filipinas...)
-    # devolvia "" aqui, e "" é tratado por extrair_escopo_remoto/combina_com
-    # como "sem restrição declarada", ou seja, PASSAVA pelo mesmo motivo que
-    # país aceito passava. Devolve o candidato bruto em vez de "" — não-vazio
+    # devolvia conjunto vazio aqui, e conjunto vazio é tratado por
+    # extrair_escopo_remoto/combina_com como "sem restrição declarada", ou
+    # seja, PASSAVA pelo mesmo motivo que país aceito passava. Devolve o
+    # candidato bruto num conjunto de 1 item em vez de vazio — não-vazio
     # sinaliza "escopo foi declarado no texto, só não está mapeado", o que
     # combina_com() agora trata como reprovado quando não bate a lista
-    # aceita (ver RegrasFiltro.mercados_remoto_aceitos). "" continua
-    # reservado só pra quando NÃO HÁ texto de escopo nenhum (ver
+    # aceita (ver RegrasFiltro.mercados_remoto_aceitos). Conjunto vazio
+    # continua reservado só pra quando NÃO HÁ texto de escopo nenhum (ver
     # extrair_escopo_remoto) ou pra "Anywhere"/"Worldwide" explícito acima.
-    return candidato
+    return {candidato}
 
 
-def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> str:
-    """Deriva o mercado geográfico de uma vaga remota a partir do texto de
-    `local`, quando a fonte expõe isso ali (ex: "Remote — US only", "Remote,
-    Brazil"). Retorna o nome canônico do mercado ("Estados Unidos", "Índia",
-    "Brasil"...), o texto bruto do candidato quando um escopo FOI declarado
-    mas não bate em nenhum país conhecido (ex: "Remote - Vietnam" -> "vietnam"
-    literal), ou "" só quando não há NENHUM texto de escopo pra ler (remoto
-    "puro", sem qualificador nenhum, ou "Anywhere"/"Worldwide" explícito).
+def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> set[str]:
+    """Deriva o(s) mercado(s) geográfico(s) de uma vaga remota a partir do
+    texto de `local`, quando a fonte expõe isso ali (ex: "Remote — US
+    only", "Remote, Brazil", "Remote - LATAM + Brazil"). Retorna um
+    CONJUNTO de nomes canônicos ({"Estados Unidos"}, {"Brasil", "LATAM"}...),
+    um conjunto de 1 item com o texto bruto quando um escopo FOI declarado
+    mas não bate em nenhum país conhecido (ex: "Remote - Vietnam" ->
+    {"vietnam"} literal), ou conjunto VAZIO só quando não há NENHUM texto
+    de escopo pra ler (remoto "puro", sem qualificador nenhum, ou
+    "Anywhere"/"Worldwide" explícito).
 
-    "" e "escopo desconhecido" são sinais DIFERENTES pra combina_com(): ""
-    é "sem restrição, aceita" (não tem base nenhuma pra rejeitar); qualquer
-    outro valor não-vazio que não esteja em mercados_remoto_aceitos é
-    rejeitado, mesmo quando esse valor é um país que o dicionário não
-    reconhece — ver _mercado_correspondente.
+    Conjunto vazio e "escopo desconhecido" são sinais DIFERENTES pra
+    combina_com(): vazio é "sem restrição, aceita" (não tem base nenhuma
+    pra rejeitar); qualquer conjunto não-vazio cuja INTERSEÇÃO com
+    mercados_remoto_aceitos for vazia é rejeitado, mesmo quando os valores
+    são país que o dicionário não reconhece — ver _mercados_correspondentes.
+
+    MEDIDO: "Remote - Brazil/LATAM" e "Remote - LATAM + Brazil" (vaga
+    aberta pra América Latina inteira) resolviam só pra "Brasil" quando a
+    função devolvia um único valor — a vaga válida pro perfil
+    internacional (que aceita LATAM) se perdia porque o valor sobrevivente
+    era justamente o que ele rejeita de propósito. Devolver todos os
+    mercados do texto, e aprovar se QUALQUER um bater na lista aceita
+    (ver combina_com), resolve isso sem perder a precisão dos outros casos.
 
     MEDIDO: desde que modalidade virou campo próprio do Job (scraper não
     escreve mais "Remoto" dentro de `local`), toda essa extração ficava
@@ -328,12 +352,13 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> str:
     WeWorkRemotely confirmam via `modalidade`, não mais via texto, então
     `local` chega aqui como só "New York, NY" ou "Bangalore, India", sem a
     raiz "remot" nenhuma. Sem o parâmetro `modalidade`, _PADRAO_ESCOPO_SEPARADOR
-    nunca casava e a função devolvia "" (sem restrição) pra QUALQUER vaga
-    remota confirmada por campo — inclusive as americanas/indianas/etc que
-    esse fix inteiro existe pra barrar. Quando não há separador no texto
-    mas `modalidade` já diz remoto, trata `local` INTEIRO como candidato de
-    escopo (a fonte confirmou modalidade por fora; o que sobra em `local` é
-    só a âncora geográfica, sem precisar achar "remot" dentro dele).
+    nunca casava e a função devolvia conjunto vazio (sem restrição) pra
+    QUALQUER vaga remota confirmada por campo — inclusive as americanas/
+    indianas/etc que esse fix inteiro existe pra barrar. Quando não há
+    separador no texto mas `modalidade` já diz remoto, trata `local`
+    INTEIRO como candidato de escopo (a fonte confirmou modalidade por
+    fora; o que sobra em `local` é só a âncora geográfica, sem precisar
+    achar "remot" dentro dele).
     """
     texto_norm = _normalizar(texto_local)
     modalidade_norm = _normalizar(modalidade)
@@ -344,7 +369,7 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> str:
     elif modalidade_norm in ("remoto", "remota"):
         resto = texto_norm
     else:
-        return ""
+        return set()
 
     # Formato "Cidade, SIGLA" (ex: "new york, ny") — a sigla de estado
     # depois da vírgula é o sinal de mercado aqui, não o nome da cidade
@@ -359,17 +384,18 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> str:
         # UF que não colide (RJ, SP, PE...) já resolve sozinha.
         if seg in _SIGLAS_UF_BRASIL:
             if seg not in _SIGLAS_UF_AMBIGUAS or cidade in _CAPITAIS_BRASIL:
-                return "Brasil"
+                return {"Brasil"}
         if seg in _SIGLAS_ESTADOS_EUA:
-            return "Estados Unidos"
+            return {"Estados Unidos"}
 
     # Nome de mercado por extenso também pode vir DEPOIS da cidade, não só
     # antes ("Florida, United States" — cortar no primeiro segmento, como
     # antes, jogava fora justamente o "United States" e devolvia "Florida",
     # que não bate em nenhuma chave de _MERCADOS_REMOTO). Substitui a
     # vírgula por espaço em vez de cortar, mantendo os segmentos na ordem
-    # original — _mercado_correspondente já faz busca por substring com
-    # borda de palavra, então acha o nome do mercado em qualquer posição.
+    # original — _mercados_correspondentes já faz busca por substring com
+    # borda de palavra, então acha todo nome de mercado presente, em
+    # qualquer posição.
     palavras = [
         p.strip(".") for p in resto.replace(",", " ").split()
         if p.strip(".") not in _PALAVRAS_IGNORAR_ESCOPO
@@ -377,14 +403,14 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> str:
     candidato = " ".join(palavras).strip()
 
     if not candidato:
-        return ""
+        return set()
 
     # "Barueri + 35 cidades" é abrangência DENTRO do Brasil, não nome de
-    # país estrangeiro — ver _PALAVRAS_REGIAO_BR. Sai como "" (sem
-    # restrição) antes de chegar no fallback de "escopo desconhecido" de
-    # _mercado_correspondente, que rejeitaria isso pelo motivo errado.
+    # país estrangeiro — ver _PALAVRAS_REGIAO_BR. Sai como conjunto vazio
+    # (sem restrição) antes de chegar no fallback de "escopo desconhecido"
+    # de _mercados_correspondentes, que rejeitaria isso pelo motivo errado.
     if any(p in _PALAVRAS_REGIAO_BR for p in candidato.split()):
-        return ""
+        return set()
 
     # Cidade sozinha, sem sigla/país junto (ex: "Remoto (Porto Alegre)",
     # "Remoto (Lisboa)") — casamento por IGUALDADE do candidato inteiro,
@@ -394,11 +420,11 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> str:
     # Portugal via "porto" — aqui o candidato já é a cidade inteira, então
     # não tem esse risco de substring.
     if candidato in _CAPITAIS_BRASIL:
-        return "Brasil"
+        return {"Brasil"}
     if candidato in _CIDADES_MERCADO:
-        return _CIDADES_MERCADO[candidato]
+        return {_CIDADES_MERCADO[candidato]}
 
-    return _mercado_correspondente(candidato)
+    return _mercados_correspondentes(candidato)
 
 
 # Padrões de data confirmados ao vivo neste projeto: "Publicada em 11/08"
@@ -567,18 +593,22 @@ class Job:
         return _detectar_senioridade(self.titulo)
 
     @property
-    def escopo_remoto(self) -> str:
-        """Mercado geográfico da vaga remota (Estados Unidos/Índia/Brasil/...),
-        derivado do texto de `local` — ver extrair_escopo_remoto(). "" quando
-        o texto não declara restrição nenhuma (remoto "puro", ou vaga que
-        nem é remota). Só informativo por si só; combina_com() é quem decide
-        se rejeita com base em RegrasFiltro.mercados_remoto_aceitos.
+    def escopo_remoto(self) -> set[str]:
+        """Mercado(s) geográfico(s) da vaga remota ({"Estados Unidos"},
+        {"Brasil", "LATAM"}...), derivado do texto de `local` — ver
+        extrair_escopo_remoto(). Conjunto VAZIO quando o texto não declara
+        restrição nenhuma (remoto "puro", ou vaga que nem é remota). Um
+        texto pode declarar mais de um mercado ao mesmo tempo ("Remote -
+        LATAM + Brazil") — devolve todos, não só o primeiro que bater. Só
+        informativo por si só; combina_com() é quem decide se rejeita com
+        base em RegrasFiltro.mercados_remoto_aceitos.
 
         Passa `self.modalidade` junto: fonte com filtro nativo (LinkedIn
         f_WT=2, WeWorkRemotely) confirma remoto por esse campo, não mais
         escrevendo "Remoto" dentro de `local` — sem isso, extrair_escopo_remoto
-        nunca achava o separador "remot..." no texto e devolvia "" (sem
-        restrição) pra vaga remota confirmada, mesmo vinda dos EUA/Índia/etc.
+        nunca achava o separador "remot..." no texto e devolvia conjunto
+        vazio (sem restrição) pra vaga remota confirmada, mesmo vinda dos
+        EUA/Índia/etc.
         """
         return extrair_escopo_remoto(self.local, self.modalidade)
 
@@ -657,16 +687,25 @@ class Job:
         # "Remote — Brazil only" passavam todos igual, porque até aqui só
         # importava SE era remoto, nunca PRA QUEM. Quando a config define
         # mercados_remoto_aceitos, uma vaga remota com escopo geográfico
-        # explícito no texto só bate se esse mercado estiver na lista aceita
-        # — vaga remota SEM escopo declarado (texto não diz "US only" nem
-        # nada parecido) continua batendo normalmente, porque não tem base
-        # nenhuma pra rejeitar. None (default) mantém o comportamento de
-        # antes: aceita qualquer remoto, sem checar mercado.
+        # explícito no texto só bate se PELO MENOS UM dos mercados
+        # declarados estiver na lista aceita — vaga remota SEM escopo
+        # declarado (texto não diz "US only" nem nada parecido) continua
+        # batendo normalmente, porque não tem base nenhuma pra rejeitar.
+        # None (default) mantém o comportamento de antes: aceita qualquer
+        # remoto, sem checar mercado.
+        #
+        # MEDIDO: "Remote - Brazil/LATAM" e "Remote - LATAM + Brazil"
+        # declaram DOIS mercados no mesmo texto — comparar só um valor
+        # (o que a extração antiga devolvia) descartava a vaga sempre que o
+        # valor sobrevivente não era o aceito, mesmo quando o outro mercado
+        # declarado era. Interseção de conjuntos em vez de igualdade de
+        # string: aprova se qualquer mercado declarado bater.
         if bate_remoto and regras.mercados_remoto_aceitos is not None:
-            escopo = self.escopo_remoto
-            if escopo:
+            escopos = self.escopo_remoto
+            if escopos:
                 mercados_aceitos_norm = {_normalizar(m) for m in regras.mercados_remoto_aceitos}
-                if _normalizar(escopo) not in mercados_aceitos_norm:
+                escopos_norm = {_normalizar(e) for e in escopos}
+                if not (escopos_norm & mercados_aceitos_norm):
                     bate_remoto = False
 
         bate_cidade = bate_remoto or any(
