@@ -4,6 +4,7 @@ import os
 from contextlib import contextmanager
 
 from config import DB_PATH
+from job import _normalizar
 
 
 def _garantir_pasta():
@@ -24,12 +25,33 @@ def _conectar():
 def _garantir_coluna_chave_secundaria(conn):
     """Migração leve: bancos criados antes da dedup por empresa+título não
     têm essa coluna. ALTER TABLE ADD COLUMN é seguro rodar preservando dado
-    existente (linha antiga fica com chave_secundaria NULL, só não participa
-    da dedup secundária retroativamente — dedup por id continua valendo
-    pra ela)."""
+    existente.
+
+    MEDIDO: a migração adicionava a coluna mas não preenchia o histórico —
+    linha antiga ficava com chave_secundaria NULL pra sempre, já que
+    salvar_vaga só grava esse valor em INSERT novo, nunca em UPDATE
+    retroativo. Resultado real: 373 linhas NULL, 52 delas duplicata de
+    outra linha (mesma empresa+título achada de novo por outra fonte) que
+    ja_vista() não pegava — `WHERE chave_secundaria = ?` nunca bate contra
+    NULL em SQL, então a vaga reaparecia como "nova" e notificava de novo.
+    Backfill roda toda vez que iniciar_db() é chamado (idempotente — só
+    tem linha NULL pra processar na primeira vez depois desse fix; depois
+    disso salvar_vaga já preenche em toda inserção nova, então o SELECT
+    abaixo volta vazio e o loop não faz nada).
+    """
     colunas = [linha[1] for linha in conn.execute("PRAGMA table_info(vagas_vistas)")]
     if "chave_secundaria" not in colunas:
         conn.execute("ALTER TABLE vagas_vistas ADD COLUMN chave_secundaria TEXT")
+
+    linhas_nulas = conn.execute(
+        "SELECT id, titulo, empresa FROM vagas_vistas WHERE chave_secundaria IS NULL"
+    ).fetchall()
+    for id_, titulo, empresa in linhas_nulas:
+        chave = f"{_normalizar(empresa or '')}|{_normalizar(titulo or '')}"
+        conn.execute(
+            "UPDATE vagas_vistas SET chave_secundaria = ? WHERE id = ?",
+            (chave, id_),
+        )
 
 
 def _garantir_coluna_publicado_em(conn):
