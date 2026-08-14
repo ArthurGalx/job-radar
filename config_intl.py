@@ -85,6 +85,36 @@ TERMOS_BUSCA_INTL = [
     "latam",
 ]
 
+# MEDIDO: filtro de cargo (KEYWORDS_INTL) nunca checou idioma — a exigência
+# de espanhol/português vivia só nos TERMOS de busca acima, que casam
+# contra o anúncio inteiro (LinkedIn/Indeed indexam a descrição toda, não
+# só o título) e nunca são reconferidos depois. Resultado: "Senior Data
+# Analyst"/"Data Analyst" remoto e sem mercado declarado passava sem
+# nenhuma palavra em comum com espanhol/português/LATAM no que a gente
+# guarda (título/empresa/local). Usado em Job.combina_com() só quando a
+# vaga é remota SEM mercado aceito declarado (ver RegrasFiltro.idiomas_
+# exigidos e comentário lá) — quando o escopo já é um país hispanofalante/
+# lusófono aceito, o país é o sinal, essa lista nem entra em jogo.
+#
+# Mesmo vocabulário dos termos soltos acima (spanish/portuguese/latam),
+# mais a grafia em espanhol/português — busca casa com anúncio em inglês
+# na maioria das vezes, mas o TÍTULO que sobra pode vir em qualquer um dos
+# três idiomas.
+IDIOMAS_EXIGIDOS_INTL = [
+    "spanish",
+    "espanol",
+    "español",
+    "portuguese",
+    "português",
+    "portugues",
+    "latam",
+    "latin america",
+    "america latina",
+    "hispanohablante",
+    "lusofono",
+    "lusófono",
+]
+
 # Rodízio de termos, mesmo mecanismo do TERMOS_POR_CICLO em config.py (ver
 # _proximo_bloco_termos em main.py) — só que com chave de metadados própria
 # (sufixo "_internacional"), pra não colidir com o rodízio do perfil BR.

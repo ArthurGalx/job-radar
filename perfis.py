@@ -41,6 +41,7 @@ from config_intl import (
     CIDADES_INTL,
     ATIVAR_EIXO_IBERICO,
     MERCADOS_REMOTO_ACEITOS_INTL,
+    IDIOMAS_EXIGIDOS_INTL,
 )
 from job import RegrasFiltro
 from scrapers.catho import CathoScraper
@@ -179,6 +180,11 @@ PERFIL_BR = Perfil(
 # Regra primária: só remoto ("Remote"/"Remoto" em CIDADES_INTL), mercado
 # LATAM/Portugal/Espanha aceito. Sem cargo ambíguo/ferramenta ainda nesse
 # perfil — simples de propósito por ser o mais novo dos dois.
+#
+# idiomas_exigidos: sem mercado declarado, exige espanhol/português/LATAM
+# no título (ver IDIOMAS_EXIGIDOS_INTL e comentário em RegrasFiltro) — a
+# busca já tentava garantir isso via termo, mas nunca era reconferido na
+# vaga em si.
 _REGRAS_INTL = RegrasFiltro(
     keywords_forte=KEYWORDS_INTL,
     keywords_ambiguo=[],
@@ -187,6 +193,7 @@ _REGRAS_INTL = RegrasFiltro(
     qualificadores_cargo=[],
     cidades=CIDADES_INTL,
     mercados_remoto_aceitos=MERCADOS_REMOTO_ACEITOS_INTL,
+    idiomas_exigidos=IDIOMAS_EXIGIDOS_INTL,
 )
 
 # Eixo secundário (Ibéria): vaga presencial/híbrida em Portugal/Espanha,

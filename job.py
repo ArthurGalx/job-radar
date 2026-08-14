@@ -525,6 +525,23 @@ class RegrasFiltro:
     # Lista vazia é diferente de None: significa "só aceita remoto SEM
     # escopo declarado", rejeitando todo mercado explícito.
     mercados_remoto_aceitos: list[str] | None = None
+    # MEDIDO: perfil internacional não exigia espanhol/português na vaga em
+    # si — só nos TERMOS de busca (ex: "data analyst spanish speaker"), que
+    # nunca eram checados de novo depois. "Senior Data Analyst"/"Data
+    # Analyst" remoto e sem mercado declarado passava sem nenhuma relação
+    # com o idioma, porque o resultado bateu no termo de busca (que casa
+    # contra o anúncio inteiro, não só o título que a gente guarda) sem que
+    # "spanish"/"portuguese"/"latam" apareça em nada que sobra depois.
+    #
+    # Mesma lógica de keywords_ambiguo (cargo ambíguo só conta com
+    # qualificador junto): quando o escopo já é um país que fala espanhol/
+    # português (ver mercados_remoto_aceitos), o PAÍS é o próprio sinal de
+    # idioma — não precisa achar a palavra no título também. Só entra em
+    # jogo quando a vaga é remota SEM mercado declarado (escopo vazio, não
+    # tem como saber o país), aí sim o título precisa mencionar idioma/
+    # mercado hispanofalante-lusófono explicitamente. None = não checa
+    # (BR não precisa — fonte já é 100% brasileira/portuguesa).
+    idiomas_exigidos: list[str] | None = None
 
 
 @dataclass
@@ -705,6 +722,10 @@ class Job:
         quer_remoto = any(_normalizar(c) in _FLAGS_REMOTO for c in regras.cidades)
         bate_remoto = quer_remoto and modalidade_norm in ("remoto", "remota")
 
+        # Calculado uma vez só e reaproveitado nos dois gates abaixo
+        # (mercado aceito e idioma exigido) — os dois leem o mesmo escopo.
+        escopos = self.escopo_remoto if bate_remoto else set()
+
         # MEDIDO: "Remote — US only", "Remote — India", "Remote — Portugal" e
         # "Remote — Brazil only" passavam todos igual, porque até aqui só
         # importava SE era remoto, nunca PRA QUEM. Quando a config define
@@ -723,12 +744,26 @@ class Job:
         # declarado era. Interseção de conjuntos em vez de igualdade de
         # string: aprova se qualquer mercado declarado bater.
         if bate_remoto and regras.mercados_remoto_aceitos is not None:
-            escopos = self.escopo_remoto
             if escopos:
                 mercados_aceitos_norm = {_normalizar(m) for m in regras.mercados_remoto_aceitos}
                 escopos_norm = {_normalizar(e) for e in escopos}
                 if not (escopos_norm & mercados_aceitos_norm):
                     bate_remoto = False
+
+        # MEDIDO: "Senior Data Analyst"/"Data Analyst" remoto, sem mercado
+        # declarado, passava sem nenhuma relação com espanhol/português —
+        # a exigência de idioma vivia só no termo de busca, nunca era
+        # reconferida aqui. Análogo a keywords_ambiguo: escopo que já é
+        # país hispanofalante/lusófono aceito É o sinal de idioma (não
+        # passa por aqui de novo — se bate_remoto sobreviveu ao gate
+        # acima com escopos não-vazio, é porque já bateu um mercado
+        # aceito). Só entra em jogo quando escopos está vazio (remoto sem
+        # mercado declarado nenhum) — aí exige idioma/mercado no título.
+        if bate_remoto and regras.idiomas_exigidos is not None and not escopos:
+            if not any(
+                _contem_termo(_normalizar(i), titulo_norm) for i in regras.idiomas_exigidos
+            ):
+                bate_remoto = False
 
         bate_cidade = bate_remoto or any(
             _contem_termo(_normalizar(c), local_norm)
