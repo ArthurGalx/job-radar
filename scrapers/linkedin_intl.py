@@ -4,7 +4,7 @@ from urllib.parse import quote_plus
 
 from playwright.sync_api import sync_playwright
 
-from job import Job, _e_remoto, _modalidade_pelo_titulo, _normalizar, extrair_data_publicacao
+from job import Job, _e_remoto, _normalizar, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -107,16 +107,15 @@ class LinkedInIntlScraper(BaseScraper):
                             # por remoto, então força modalidade="Remoto" sem
                             # depender do texto de local (que normalmente só
                             # mostra a cidade onde a empresa está registrada,
-                            # nunca "Remote"/"Remoto" literalmente) — EXCETO
-                            # quando o título contradiz a classificação (ver
-                            # _modalidade_pelo_titulo em job.py): filtro
-                            # nativo do LinkedIn às vezes marca como remota
-                            # vaga que o próprio anúncio diz "Hybrid". Passada
+                            # nunca "Remote"/"Remoto" literalmente). Filtro
+                            # nativo às vezes diverge do próprio anúncio (ex:
+                            # título diz "Hybrid") — Job.__post_init__ corrige
+                            # isso pra QUALQUER fonte, não só aqui. Passada
                             # nacional: sem filtro nativo, só resta a detecção
                             # orgânica no texto (raramente bate, mas serve como
                             # fallback pro eixo Ibérico quando religado).
                             if remoto:
-                                modalidade = _modalidade_pelo_titulo(titulo) or "Remoto"
+                                modalidade = "Remoto"
                             else:
                                 modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
 

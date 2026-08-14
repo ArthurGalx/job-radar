@@ -742,6 +742,23 @@ class Job:
     # tira ele da checagem de mercado.
     escopo_indefinido: bool = False
 
+    def __post_init__(self):
+        """Sobrepõe modalidade="Remoto" quando o TÍTULO contradiz (Híbrido/
+        Presencial) — ver _modalidade_pelo_titulo.
+
+        MEDIDO: essa correção existia só dentro de linkedin.py/
+        linkedin_intl.py, aplicada manualmente na hora de montar o Job.
+        indeed_intl.py tinha o mesmo problema (modalidade="Remoto" cravada
+        direto quando o filtro nativo da URL está ligado, sem olhar o
+        título) e não usava a correção — vaga híbrida do Indeed com filtro
+        nativo passava como remota no perfil internacional. Import por
+        scraper depende de cada um lembrar de aplicar; aqui roda pra TODO
+        Job automaticamente, incluindo fonte futura que ainda nem existe.
+        """
+        modalidade_real = _modalidade_pelo_titulo(self.titulo)
+        if modalidade_real and self.modalidade == "Remoto":
+            self.modalidade = modalidade_real
+
     @property
     def id(self) -> str:
         """Identificador único da vaga, baseado no link (evita duplicatas).
