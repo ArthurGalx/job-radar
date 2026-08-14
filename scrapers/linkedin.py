@@ -5,7 +5,7 @@ from urllib.parse import quote_plus
 from playwright.sync_api import sync_playwright
 
 from config import LOCATIONS_LINKEDIN, LOCATIONS_LINKEDIN_REMOTO_APENAS
-from job import Job, _e_remoto, _normalizar, extrair_data_publicacao
+from job import Job, _e_remoto, _modalidade_pelo_titulo, _normalizar, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -155,10 +155,15 @@ class LinkedInScraper(BaseScraper):
                             # LinkedIn classificou assim), mesmo quando o
                             # campo local só mostra a cidade da empresa —
                             # marca direto, sem precisar achar "remoto" no
-                            # texto do local. Passada nacional: só marca se o
-                            # próprio card organicamente disser isso no local.
+                            # texto do local — EXCETO quando o título
+                            # contradiz a classificação (ver
+                            # _modalidade_pelo_titulo em job.py e MEDIDO lá:
+                            # f_WT=2 às vezes marca como remota vaga cujo
+                            # próprio anúncio diz "Hybrid"). Passada
+                            # nacional: só marca se o próprio card
+                            # organicamente disser isso no local.
                             if remoto:
-                                modalidade = "Remoto"
+                                modalidade = _modalidade_pelo_titulo(titulo) or "Remoto"
                             else:
                                 modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
 

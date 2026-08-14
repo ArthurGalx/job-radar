@@ -71,6 +71,30 @@ def _e_remoto(texto: str) -> bool:
     return any(termo in texto for termo in TERMOS_REMOTO)
 
 
+# Vocabulário que, no TÍTULO da vaga, contradiz "remoto" — usado pra não
+# confiar cegamente em fonte com filtro nativo de remoto (f_WT=2 do
+# LinkedIn) quando ela diverge do próprio anúncio. MEDIDO em produção: 1
+# de 81 vagas internacionais veio com modalidade=Remoto (via f_WT=2, o
+# LinkedIn classificou como remota) mas o título dizia "Data Analyst
+# (Analista de Datos) - Hybrid" — o filtro do próprio LinkedIn às vezes
+# diverge do anúncio real. Como o perfil internacional só quer remoto de
+# verdade, o título vence quando contradiz a classificação da fonte.
+_TERMOS_TITULO_HIBRIDO = ["hybrid", "hibrido"]
+_TERMOS_TITULO_PRESENCIAL = ["on-site", "onsite", "on site", "presencial"]
+
+
+def _modalidade_pelo_titulo(titulo: str) -> str | None:
+    """Devolve a modalidade real quando o TÍTULO contradiz "remoto"
+    (Híbrido/Presencial) — None quando o título não contradiz nada (a
+    classificação da fonte permanece confiável)."""
+    titulo_norm = _normalizar(titulo)
+    if any(termo in titulo_norm for termo in _TERMOS_TITULO_HIBRIDO):
+        return "Híbrido"
+    if any(termo in titulo_norm for termo in _TERMOS_TITULO_PRESENCIAL):
+        return "Presencial"
+    return None
+
+
 # MEDIDO: "Remote — US only", "Remote — India", "Remote — Portugal" e
 # "Remote — Brazil only" passavam TODOS igual no filtro, porque _e_remoto()
 # só confirma que existe a raiz "remot" e para de ler ali — não olha o que
