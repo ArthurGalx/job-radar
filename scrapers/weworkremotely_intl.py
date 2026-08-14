@@ -49,8 +49,20 @@ class WeWorkRemotelyIntlScraper(BaseScraper):
 
             try:
                 page.goto(url, timeout=60000)
+                # MEDIDO: 21 execuções em produção, 0 vaga em todas.
+                # Confirmado ao vivo (fetch HTTP puro + inspeção de DOM via
+                # Chrome) que a URL e o seletor CONTINUAM corretos — o
+                # conteúdo vem renderizado no servidor (já está no HTML
+                # antes de qualquer JS rodar), não é SPA que precisa
+                # esperar client-side render. `wait_for_selector` sem
+                # `state` explícito espera "visible" por padrão — mesma
+                # categoria de bug já visto e corrigido no Indeed Intl
+                # (ver FILTRO_REMOTO/state="attached" nesse scraper).
+                # "attached" é suficiente aqui porque o card já existe no
+                # DOM assim que goto() retorna, sem precisar esperar
+                # pintura completa.
                 try:
-                    page.wait_for_selector("li.new-listing-container", timeout=15000)
+                    page.wait_for_selector("li.new-listing-container", state="attached", timeout=15000)
                 except Exception:
                     logger.info(f"[WeWorkRemotely Intl] 0 resultados para '{termo}'.")
                     return vagas
