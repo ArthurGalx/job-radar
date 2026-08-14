@@ -42,13 +42,27 @@ def _contem_termo(termo: str, texto: str, aceitar_plural: bool = False) -> bool:
 # "anywhere". Centralizado aqui em vez de espalhado, e documentado que
 # "remot" sozinho já cobre bastante coisa por ser raiz de palavra, não uma
 # palavra fixa: Remoto, Remota, Remote, Trabalho Remoto, 100% Remoto,
-# Fully Remote — todas contêm "remot" em algum ponto.
+# Fully Remote — todas contêm "remot" em algum ponto. "Remoto"/"remota"
+# em espanhol usa a mesma raiz ("trabajo remoto"), então já cobertos.
+#
+# MEDIDO: faltava o vocabulário que NÃO compartilha a raiz "remot" em
+# espanhol — "teletrabajo" é o termo padrão no mercado espanhol (visto ao
+# vivo: "España (Teletrabajo)"), "trabajo a distancia" e "desde casa"
+# também aparecem soltos, sem a raiz "remot" perto. Sem isso, vaga desses
+# mercados ficava sem sinal orgânico de remoto (afeta a passada nacional
+# de LinkedIn/LinkedIn Intl, que só tem esse texto como fallback quando
+# não há filtro nativo — ver _e_remoto em scrapers/linkedin.py e
+# linkedin_intl.py) — direto no alvo do perfil internacional (Espanha +
+# América Latina).
 TERMOS_REMOTO = [
     "remot",  # raiz: Remoto/Remota/Remote/Trabalho Remoto/100% Remoto/Fully Remote
     "home office",
     "work from home",
     "trabalhe de casa",  # variante em português vista ao vivo no Catho
-    "teletrabalho",
+    "teletrabalho",  # português (Portugal)
+    "teletrabajo",  # espanhol — termo padrão no mercado espanhol
+    "trabajo a distancia",  # espanhol
+    "desde casa",  # espanhol ("trabajo desde casa")
     "anywhere",
 ]
 
