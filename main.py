@@ -2,6 +2,7 @@
 import argparse
 import sys
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 
@@ -133,6 +134,7 @@ def ciclo_de_busca(perfil: Perfil):
     total_brutas = 0
     total_filtradas = 0
     scrapers_com_problema = []
+    descartes_escopo_ciclo: Counter = Counter()
 
     termos_do_ciclo = _proximo_bloco_termos(perfil)
     logger.info(
@@ -174,7 +176,8 @@ def ciclo_de_busca(perfil: Perfil):
                 continue
 
             total_brutas += len(vagas)
-            vagas_filtradas = filtrar_vagas(vagas, perfil.regras)
+            vagas_filtradas, descartes = filtrar_vagas(vagas, perfil.regras)
+            descartes_escopo_ciclo.update(descartes)
 
             # Eixo secundário (Ibéria, quando ligado): mesma regra de cargo,
             # cidade diferente — sem duplicar o que já bateu na regra
@@ -182,7 +185,8 @@ def ciclo_de_busca(perfil: Perfil):
             vagas_secundarias = []
             if perfil.eixo_secundario_ativo and perfil.regras_eixo_secundario is not None:
                 ids_filtradas = {v.id for v in vagas_filtradas}
-                candidatas = filtrar_vagas(vagas, perfil.regras_eixo_secundario)
+                candidatas, descartes_secundario = filtrar_vagas(vagas, perfil.regras_eixo_secundario)
+                descartes_escopo_ciclo.update(descartes_secundario)
                 vagas_secundarias = [v for v in candidatas if v.id not in ids_filtradas]
 
             total_filtradas += len(vagas_filtradas) + len(vagas_secundarias)
@@ -239,6 +243,20 @@ def ciclo_de_busca(perfil: Perfil):
         f"[{perfil.nome}] Ciclo concluído: {total_brutas} brutas → {total_filtradas} filtradas → "
         f"{total_novas} nova(s)."
     )
+
+    # MEDIDO: descarte por escopo era invisível no log — o funil mostra
+    # bruta → filtrada → nova, mas nunca QUAL escopo derrubou vaga nem
+    # QUANTAS. Um escopo mal reconhecido (texto cru tipo "lagos nigeria",
+    # não mapeado em _MERCADOS_REMOTO) barra do jeito certo, mas some sem
+    # rastro — foi assim que um bug real (escopo virando allowlist) passou
+    # despercebido até virar relato explícito. Loga só quando há descarte
+    # (a maioria dos ciclos não tem nenhum), ordenado do que mais derrubou
+    # vaga pro que menos derrubou.
+    if descartes_escopo_ciclo:
+        detalhe = "; ".join(
+            f"{escopo} ({n})" for escopo, n in descartes_escopo_ciclo.most_common()
+        )
+        logger.info(f"[{perfil.nome}] Descarte por escopo: {detalhe}")
 
     # Alerta de saúde: se a maioria das fontes falhou/voltou vazia, avisa no
     # Telegram. Sem isso, um bloqueio geral ou mudança de layout passaria

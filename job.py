@@ -855,3 +855,35 @@ class Job:
         )
 
         return bate_keyword and bate_cidade
+
+    def escopo_rejeitado_por_mercado(self, regras: RegrasFiltro) -> set[str] | None:
+        """Só pra diagnóstico/log (ver utils/filtro.py) — refaz o mesmo
+        cálculo do gate de mercado que combina_com() usa, sem decidir nada
+        sozinho (não influencia se a vaga passa ou não). Devolve o conjunto
+        de escopos declarados quando ELE é o motivo da vaga não bater
+        (remota, mercado declarado no texto, nenhum mercado declarado está
+        na lista aceita) — None quando não se aplica: não é remota, não
+        declarou mercado nenhum, ou o mercado bateu.
+
+        MEDIDO: sem visibilidade de QUAL escopo derrubou a vaga, um país
+        mal reconhecido (texto cru tipo "lagos nigeria", não mapeado em
+        _MERCADOS_REMOTO) só aparece pro funil como "menos uma filtrada" —
+        indistinguível de qualquer outro descarte. Foi assim que o bug do
+        item 01 (escopo virando allowlist) passou despercebido até virar
+        relato explícito.
+        """
+        if regras.mercados_remoto_aceitos is None:
+            return None
+        modalidade_norm = _normalizar(self.modalidade)
+        _FLAGS_REMOTO = ("remoto", "remota", "remote")
+        quer_remoto = any(_normalizar(c) in _FLAGS_REMOTO for c in regras.cidades)
+        if not (quer_remoto and modalidade_norm in ("remoto", "remota")):
+            return None
+        escopos = self.escopo_remoto
+        if not escopos:
+            return None
+        mercados_aceitos_norm = {_normalizar(m) for m in regras.mercados_remoto_aceitos}
+        escopos_norm = {_normalizar(e) for e in escopos}
+        if escopos_norm & mercados_aceitos_norm:
+            return None
+        return escopos
