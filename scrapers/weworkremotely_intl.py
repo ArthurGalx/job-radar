@@ -72,6 +72,17 @@ class WeWorkRemotelyIntlScraper(BaseScraper):
                         # direto, sem precisar embutir isso em `local`. O campo
                         # abaixo é a sede da empresa, não a modalidade — fica
                         # como informação pura de local, sem hack de texto.
+                        #
+                        # MEDIDO: sede da empresa NÃO é o mercado onde a vaga
+                        # contrata (ex: empresa sediada em San Francisco pode
+                        # contratar candidato de qualquer lugar). Desde que
+                        # extrair_escopo_remoto passou a usar `local` inteiro
+                        # como escopo quando `modalidade` já confirma remoto
+                        # (ver Job.escopo_remoto em job.py), guardar a sede
+                        # aqui faria vaga remota mundial ser barrada pelo
+                        # endereço da empresa. `escopo_indefinido=True` abaixo
+                        # tira esse campo da checagem de mercado, sem deixar
+                        # de exibir a sede na notificação.
                         sede_el = card.query_selector(".new-listing__company-headquarters")
                         sede = sede_el.inner_text().strip() if sede_el else "Não informado"
 
@@ -91,6 +102,7 @@ class WeWorkRemotelyIntlScraper(BaseScraper):
                             site="We Work Remotely",
                             publicado_em=publicado_em,
                             modalidade="Remoto",
+                            escopo_indefinido=True,
                         ))
                     except Exception as e:
                         logger.warning(f"[WeWorkRemotely Intl] Erro ao processar card: {e}")

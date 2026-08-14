@@ -555,6 +555,20 @@ class Job:
     # `local` só com informação de localização de verdade. Valores usados:
     # "Remoto", "Híbrido", "Presencial", ou "" quando a fonte não expõe.
     modalidade: str = ""
+    # MEDIDO: WeWorkRemotelyIntlScraper preenche `local` com a SEDE da
+    # empresa (".new-listing__company-headquarters"), não o mercado onde a
+    # vaga contrata — o site é 100% remoto por definição, sede não diz nada
+    # sobre de onde a empresa aceita candidato. Depois que
+    # extrair_escopo_remoto passou a usar `local` inteiro como escopo
+    # quando `modalidade` já confirma remoto (ver Job.escopo_remoto), uma
+    # vaga remota mundial de empresa sediada nos EUA passaria a ser barrada
+    # pelo endereço da sede, que nunca foi o mercado real da vaga. Esse
+    # flag existe pra distinguir os dois casos: `local` como mercado de
+    # contratação de verdade (LinkedIn/Indeed, onde o campo reflete a
+    # vaga) vs `local` como informação de sede (WeWorkRemotely, onde não
+    # reflete). Mantém `local` preenchido pra exibir na notificação — só
+    # tira ele da checagem de mercado.
+    escopo_indefinido: bool = False
 
     @property
     def id(self) -> str:
@@ -603,13 +617,21 @@ class Job:
         informativo por si só; combina_com() é quem decide se rejeita com
         base em RegrasFiltro.mercados_remoto_aceitos.
 
+        `escopo_indefinido=True` (ver campo acima) força conjunto vazio
+        direto, sem nem chamar extrair_escopo_remoto — usado quando
+        `local` não representa mercado de contratação (ex: sede da empresa
+        no WeWorkRemotely), então não tem base nenhuma pra derivar escopo
+        dali, mesmo com modalidade="Remoto".
+
         Passa `self.modalidade` junto: fonte com filtro nativo (LinkedIn
-        f_WT=2, WeWorkRemotely) confirma remoto por esse campo, não mais
-        escrevendo "Remoto" dentro de `local` — sem isso, extrair_escopo_remoto
-        nunca achava o separador "remot..." no texto e devolvia conjunto
-        vazio (sem restrição) pra vaga remota confirmada, mesmo vinda dos
+        f_WT=2) confirma remoto por esse campo, não mais escrevendo
+        "Remoto" dentro de `local` — sem isso, extrair_escopo_remoto nunca
+        achava o separador "remot..." no texto e devolvia conjunto vazio
+        (sem restrição) pra vaga remota confirmada, mesmo vinda dos
         EUA/Índia/etc.
         """
+        if self.escopo_indefinido:
+            return set()
         return extrair_escopo_remoto(self.local, self.modalidade)
 
     def combina_com(self, regras: RegrasFiltro) -> bool:
