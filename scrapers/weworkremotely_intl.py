@@ -46,6 +46,21 @@ class WeWorkRemotelyIntlScraper(BaseScraper):
                     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
                 )
             )
+            # MEDIDO ao vivo (Claude in Chrome): endpoint e seletor estão
+            # certos — /remote-jobs/search?term=data+analyst devolve vaga
+            # real ("Data Analyst – AI Translation Quality"), e
+            # `li.new-listing-container` bate 6 elementos na hora, sem
+            # nenhuma espera. O 0 resultado consistente de produção não é
+            # busca errada, então sobra bloqueio anti-bot ao request
+            # automatizado — igual já documentado no docstring da classe
+            # pra qualquer fonte. Único scraper deste projeto sem essa
+            # linha (indeed_intl.py e catho.py já mascaram); adicionando
+            # aqui também. Não tenho como confirmar 100% que resolve sem
+            # rodar Playwright de verdade (sandbox não baixa o browser) —
+            # confirmar no próximo ciclo real.
+            page.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })"
+            )
 
             try:
                 page.goto(url, timeout=60000)
