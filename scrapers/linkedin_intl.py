@@ -1,9 +1,10 @@
 
 import time
+from urllib.parse import quote_plus
 
 from playwright.sync_api import sync_playwright
 
-from job import Job
+from job import Job, _e_remoto, _normalizar, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -42,7 +43,7 @@ class LinkedInIntlScraper(BaseScraper):
     def _buscar_termo(self, termo: str, location: str) -> list[Job]:
         logger.info(f"[LinkedIn Intl] Buscando: '{termo}' em {location}")
         vagas: list[Job] = []
-        termo_url = termo.replace(" ", "+")
+        termo_url = quote_plus(termo)
         location_url = location.replace(" ", "+")
 
         with sync_playwright() as p:
@@ -86,11 +87,20 @@ class LinkedInIntlScraper(BaseScraper):
                             local_el = card.query_selector(".job-search-card__location")
                             local = local_el.inner_text().strip() if local_el else "Não informado"
 
+                            # Sem filtro nativo tipo f_WT=2 aqui (diferente do
+                            # linkedin.py nacional) — o único sinal de remoto é
+                            # o próprio texto de local, quando o card diz isso
+                            # organicamente ("Remote", "Remoto"). Detecta uma
+                            # vez aqui em vez de deixar pro filtro reparsear.
+                            modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
+
                             link_el = card.query_selector("a.base-card__full-link")
                             link = link_el.get_attribute("href") if link_el else None
                             if not link:
                                 continue
                             link = link.split("?")[0]
+
+                            publicado_em = extrair_data_publicacao(card.inner_text())
 
                             vagas.append(Job(
                                 titulo=titulo,
@@ -98,6 +108,8 @@ class LinkedInIntlScraper(BaseScraper):
                                 local=local,
                                 link=link,
                                 site="LinkedIn Internacional",
+                                publicado_em=publicado_em,
+                                modalidade=modalidade,
                             ))
                         except Exception as e:
                             logger.warning(f"[LinkedIn Intl] Erro ao processar card: {e}")

@@ -15,6 +15,16 @@ permissions:
 jobs:
   buscar-vagas:
     runs-on: ubuntu-latest
+    # Sem isso, o padrão do GitHub Actions é 6h (360min) — uma fonte travada
+    # (ex: Catho com timeout de anti-bot, ou LinkedIn rate-limitado)
+    # consumiria até 6h de cada vez. Com concurrency.cancel-in-progress:
+    # false, um run travado também bloqueia o próximo ciclo inteiro, porque
+    # o run seguinte fica na fila esperando o anterior liberar o grupo. 150
+    # min dá folga real sobre a duração medida do ciclo (~1h30-2h com toda a
+    # paginação e a passada dupla do LinkedIn) e ainda fica abaixo do
+    # intervalo do cron (3h), então um run truncado nunca empilha em cima
+    # do próximo agendado.
+    timeout-minutes: 150
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@v4

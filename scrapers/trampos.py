@@ -4,7 +4,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-from job import Job
+from job import Job, _e_remoto, _normalizar, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -85,11 +85,18 @@ class TramposScraper(BaseScraper):
                                 local = _PREFIXOS_TIPO.sub("", linha).strip()
                                 break
 
+                        # Sem campo de modalidade próprio no card — mesmo
+                        # sinal usado nos outros scrapers sem seletor
+                        # dedicado, aplicado uma vez aqui na extração.
+                        modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
+
                         link = card.get_attribute("href")
                         if not link:
                             continue
                         if link.startswith("/"):
                             link = f"https://trampos.co{link}"
+
+                        publicado_em = extrair_data_publicacao(card.inner_text())
 
                         vagas.append(Job(
                             titulo=titulo,
@@ -97,6 +104,8 @@ class TramposScraper(BaseScraper):
                             local=local,
                             link=link,
                             site="Trampos",
+                            publicado_em=publicado_em,
+                            modalidade=modalidade,
                         ))
                     except Exception as e:
                         logger.warning(f"[Trampos] Erro ao processar card: {e}")

@@ -1,9 +1,10 @@
 
 import time
+from urllib.parse import quote_plus
 
 from playwright.sync_api import sync_playwright
 
-from job import Job
+from job import Job, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -29,7 +30,10 @@ class Jobs99Scraper(BaseScraper):
     def _buscar_termo(self, termo: str) -> list[Job]:
         logger.info(f"[99Jobs] Buscando: {termo}")
         vagas: list[Job] = []
-        termo_url = termo.replace(" ", "+")
+        # quote_plus em vez de .replace(" ", "+") manual: termo pode ter "&"
+        # (ex: "BI & Analytics Analyst"), que sem escapar quebra a query
+        # string no meio e corrompe a busca silenciosamente.
+        termo_url = quote_plus(termo)
         url = f"https://www.99jobs.com/opportunities/filtered_search?search%5Bterm%5D={termo_url}"
 
         with sync_playwright() as p:
@@ -84,20 +88,22 @@ class Jobs99Scraper(BaseScraper):
                                 modalidade = texto_span
                                 break
 
-                        local = f"{cidade} ({modalidade})" if modalidade else cidade
-
                         link = card.get_attribute("href")
                         if not link:
                             continue
                         if link.startswith("/"):
                             link = f"https://www.99jobs.com{link}"
 
+                        publicado_em = extrair_data_publicacao(card.inner_text())
+
                         vagas.append(Job(
                             titulo=titulo,
                             empresa=empresa,
-                            local=local,
+                            local=cidade,
                             link=link,
                             site="99Jobs",
+                            publicado_em=publicado_em,
+                            modalidade=modalidade,
                         ))
                     except Exception as e:
                         logger.warning(f"[99Jobs] Erro ao processar card: {e}")

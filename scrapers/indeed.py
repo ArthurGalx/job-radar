@@ -1,9 +1,10 @@
 
 import time
+from urllib.parse import quote_plus
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-from job import Job
+from job import Job, _e_remoto, _normalizar, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -38,7 +39,10 @@ class IndeedScraper(BaseScraper):
     def _buscar_termo(self, termo: str) -> list[Job]:
         logger.info(f"[Indeed] Buscando: {termo}")
         vagas: list[Job] = []
-        termo_url = termo.replace(" ", "+")
+        # quote_plus em vez de .replace(" ", "+") manual: termo pode ter "&"
+        # (ex: "BI & Analytics Analyst"), que sem escapar quebra a query
+        # string no meio e corrompe a busca silenciosamente.
+        termo_url = quote_plus(termo)
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -59,7 +63,21 @@ class IndeedScraper(BaseScraper):
                     page.goto(url, timeout=60000)
                     try:
                         page.wait_for_selector(".job_seen_beacon", state="attached", timeout=25000)
-                    except Exception:
+                    except PlaywrightTimeoutError:
+                        # Timeout de verdade (site lento, bloqueio anti-bot) é
+                        # DIFERENTE de "acabaram as vagas" — isso é sinalizado
+                        # abaixo, quando a página carrega normal mas devolve 0
+                        # cards. Sem essa distinção, um timeout em qualquer
+                        # página (inclusive a 1a) virava break silencioso
+                        # idêntico ao fim natural da paginação, e o aviso de
+                        # "possível bloqueio anti-bot" nunca chegava a disparar
+                        # — justamente no caso em que ele mais importa.
+                        logger.warning(
+                            f"[Indeed] Timeout esperando resultados na página {pagina + 1} "
+                            f"de '{termo}' — parando de paginar por falha de carregamento "
+                            "(possível bloqueio anti-bot), não por fim real dos resultados. "
+                            "Pode ter ficado vaga de fora."
+                        )
                         break
                     time.sleep(2)
 
@@ -84,11 +102,20 @@ class IndeedScraper(BaseScraper):
                             local_el = card.query_selector('[data-testid="text-location"]')
                             local = local_el.inner_text().strip() if local_el else "Não informado"
 
+                            # Indeed não tem campo de modalidade separado no
+                            # card — às vezes o próprio texto de local já diz
+                            # "Remoto"/"Home office" organicamente. Detecta uma
+                            # vez aqui, na extração, em vez de deixar pro
+                            # filtro reparsear `local` toda vez.
+                            modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
+
                             link_el = card.query_selector("a[data-jk]")
                             jk = link_el.get_attribute("data-jk") if link_el else None
                             if not jk:
                                 continue
                             link = f"https://br.indeed.com/viewjob?jk={jk}"
+
+                            publicado_em = extrair_data_publicacao(card.inner_text())
 
                             vagas.append(Job(
                                 titulo=titulo,
@@ -96,6 +123,8 @@ class IndeedScraper(BaseScraper):
                                 local=local,
                                 link=link,
                                 site="Indeed",
+                                publicado_em=publicado_em,
+                                modalidade=modalidade,
                             ))
                         except Exception as e:
                             logger.warning(f"[Indeed] Erro ao processar card: {e}")

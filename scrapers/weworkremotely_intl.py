@@ -1,9 +1,10 @@
 
 import time
+from urllib.parse import quote_plus
 
 from playwright.sync_api import sync_playwright
 
-from job import Job
+from job import Job, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -34,7 +35,7 @@ class WeWorkRemotelyIntlScraper(BaseScraper):
     def _buscar_termo(self, termo: str) -> list[Job]:
         logger.info(f"[WeWorkRemotely Intl] Buscando: {termo}")
         vagas: list[Job] = []
-        termo_url = termo.replace(" ", "+")
+        termo_url = quote_plus(termo)
         url = f"https://weworkremotely.com/remote-jobs/search?term={termo_url}"
 
         with sync_playwright() as p:
@@ -67,15 +68,12 @@ class WeWorkRemotelyIntlScraper(BaseScraper):
                         empresa = empresa_el.inner_text().strip() if empresa_el else "Não informado"
 
                         # Todo anúncio do WeWorkRemotely já é vaga remota por
-                        # definição (é a proposta do site) — o campo abaixo é
-                        # a sede da empresa, não a modalidade. Por isso força
-                        # "Remote" sempre, senão o filtro de cidade (que exige
-                        # "remote"/"remoto" no local) rejeitaria vaga remota
-                        # de verdade só porque o card mostra "San Francisco, CA"
-                        # como sede.
+                        # definição (é a proposta do site) — modalidade="Remoto"
+                        # direto, sem precisar embutir isso em `local`. O campo
+                        # abaixo é a sede da empresa, não a modalidade — fica
+                        # como informação pura de local, sem hack de texto.
                         sede_el = card.query_selector(".new-listing__company-headquarters")
-                        sede = sede_el.inner_text().strip() if sede_el else ""
-                        local = f"Remote ({sede})" if sede else "Remote"
+                        sede = sede_el.inner_text().strip() if sede_el else "Não informado"
 
                         link_el = card.query_selector('a[href^="/remote-jobs/"]')
                         link = link_el.get_attribute("href") if link_el else None
@@ -83,12 +81,16 @@ class WeWorkRemotelyIntlScraper(BaseScraper):
                             continue
                         link = f"https://weworkremotely.com{link.split('?')[0]}"
 
+                        publicado_em = extrair_data_publicacao(card.inner_text())
+
                         vagas.append(Job(
                             titulo=titulo,
                             empresa=empresa,
-                            local=local,
+                            local=sede,
                             link=link,
                             site="We Work Remotely",
+                            publicado_em=publicado_em,
+                            modalidade="Remoto",
                         ))
                     except Exception as e:
                         logger.warning(f"[WeWorkRemotely Intl] Erro ao processar card: {e}")

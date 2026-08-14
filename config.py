@@ -12,7 +12,6 @@ KEYWORDS_CARGO_FORTE = [
     "Analista de BI",
     "Business Intelligence",
     "Data Analytics",
-    "Analytics Engineer",
     "Analista de Analytics",
     "Data Analyst",
     "Desenvolvedor BI",
@@ -34,6 +33,10 @@ KEYWORDS_CARGO_FORTE = [
     "Data Specialist",
     "Data Quality Analyst",
     "Data Intelligence Analyst",
+    "BI & Analytics Analyst",
+    "Analytics Specialist",
+    "Especialista em Dados",
+    "Analista de Planejamento e Dados",
 ]
 
 # Cargo ambíguo: título que também é usado em vaga sem nada a ver com
@@ -126,6 +129,17 @@ TERMOS_FERRAMENTA = [
 ]
 
 TERMOS_BUSCA = TERMOS_CARGO + TERMOS_FERRAMENTA
+
+# Medido: os TERMOS_BUSCA inteiros (hoje 42) rodando em TODO ciclo é o que
+# gera as centenas de sessões de navegador por execução — o custo cresce
+# linear com o tamanho da lista, e a lista só cresce (mais ainda com a
+# expansão internacional puxando mais termos no radar). TERMOS_POR_CICLO é
+# o tamanho do BLOCO usado por ciclo, não o total de termos — main.py roda
+# um bloco por vez em rodízio (ver _proximo_bloco_termos) e avança pro
+# próximo bloco no ciclo seguinte, salvando a posição no jobs.db. Isso
+# desacopla custo por ciclo de tamanho da lista: dobrar TERMOS_BUSCA dobra
+# quantos ciclos até cobrir tudo de novo, não o custo de cada ciclo.
+TERMOS_POR_CICLO = 10
 
 CIDADES = [
     "Remoto",

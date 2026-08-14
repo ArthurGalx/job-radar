@@ -1,5 +1,6 @@
 
 import argparse
+import sys
 
 from config_intl import (
     KEYWORDS_INTL,
@@ -10,7 +11,7 @@ from config_intl import (
     CIDADES_EUROPA_IBERICA,
     ATIVAR_EIXO_IBERICO,
 )
-from database.database import iniciar_db, ja_vista, salvar_vaga
+from database.database import BancoVazioSuspeito, iniciar_db, ja_vista, salvar_vaga
 from notifier.telegram import notificar_vaga, enviar_mensagem
 from scrapers.linkedin_intl import LinkedInIntlScraper
 from scrapers.indeed_intl import IndeedIntlScraper
@@ -28,12 +29,14 @@ def _notificar_vaga_exploratoria(job) -> bool:
     remota — então a notificação avisa isso explicitamente, pra não confundir
     com os achados 100% remoto do resto do pipeline internacional.
     """
+    linha_modalidade = f"<b>Modalidade:</b> {job.modalidade}\n" if job.modalidade else ""
     texto = (
         f"🧭 <b>Vaga exploratória (Portugal/Espanha)</b>\n\n"
         f"<b>Empresa:</b> {job.empresa}\n"
         f"<b>Cargo:</b> {job.titulo}\n"
         f"<b>Nível:</b> {job.senioridade}\n"
         f"<b>Local:</b> {job.local}\n"
+        f"{linha_modalidade}"
         f"<b>Site:</b> {job.site}\n\n"
         f"Achada via busca por Portugal/Espanha — modalidade não confirmada "
         f"como remota, pode ser presencial ou híbrida. Confirma no link.\n\n"
@@ -145,7 +148,17 @@ def main():
     for loc in LOCATIONS_INTL:
         print(f"• {loc}")
 
-    iniciar_db()
+    try:
+        iniciar_db()
+    except BancoVazioSuspeito as e:
+        # Mesma proteção do main.py: aborta antes de rodar qualquer busca,
+        # senão toda vaga bateria "não vista" e notificaria centenas de
+        # vez uma só. Banco é o MESMO jobs.db do pipeline BR (ver
+        # config_intl.py), então esse alerta cobre os dois pipelines.
+        logger.error(str(e))
+        enviar_mensagem(f"🛑 <b>JobRadar Internacional abortado</b>\n\n{e}")
+        sys.exit(1)
+
     ciclo_de_busca_intl()
 
 

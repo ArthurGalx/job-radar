@@ -56,6 +56,43 @@ def _e_remoto(texto: str) -> bool:
     return any(termo in texto for termo in TERMOS_REMOTO)
 
 
+# Padrões de data confirmados ao vivo neste projeto: "Publicada em 11/08"
+# (Catho) e "Há 4 meses" / "Há 3 semanas" (LinkedIn, no card de busca).
+# Regex sobre o TEXTO INTEIRO do card, em vez de um seletor CSS por site —
+# cada fonte marca isso de um jeito diferente (às vezes nem tag própria,
+# só texto solto), e adivinhar seletor sem inspecionar o DOM ao vivo é
+# arriscado (podia quebrar silenciosamente ou pegar texto errado). Regex
+# sobre o texto renderizado funciona em qualquer site sem esse risco — na
+# pior hipótese não acha nada e publicado_em fica "" (aceitável, "quando
+# existir").
+_PADRAO_DATA_ABSOLUTA = re.compile(
+    r"publicad[ao]\s+(?:em|há)?\s*:?\s*"
+    r"(\d{1,2}\s+de\s+\w+(?:\s+de\s+\d{2,4})?|\d{1,2}/\d{1,2}(?:/\d{2,4})?)",
+    re.IGNORECASE,
+)
+_PADRAO_DATA_RELATIVA = re.compile(
+    # Plural como sufixo opcional (dias?/semanas?/anos?), não alternativa
+    # separada — "dia|dias" bate "dia" primeiro e para aí, cortando o "s"
+    # de "dias" (regex não escolhe o match mais longo, escolhe o primeiro).
+    r"há\s+\d+\s+(?:dias?|semanas?|m[êe]s(?:es)?|anos?)",
+    re.IGNORECASE,
+)
+_PADRAO_HOJE_ONTEM = re.compile(r"\b(hoje|ontem)\b", re.IGNORECASE)
+
+
+def extrair_data_publicacao(texto_card: str) -> str:
+    """Procura sinal de data de publicação no texto renderizado de um card
+    de vaga. Cobre formato absoluto ("Publicada em 11/08", "Publicada em 11
+    de agosto de 2026") e relativo ("Há 4 meses"). Retorna "" quando o site
+    não expõe isso no card de busca — nem toda fonte tem.
+    """
+    for padrao in (_PADRAO_DATA_ABSOLUTA, _PADRAO_DATA_RELATIVA, _PADRAO_HOJE_ONTEM):
+        m = padrao.search(texto_card)
+        if m:
+            return m.group(0).strip()
+    return ""
+
+
 # Ordem importa: do mais específico pro mais genérico. Título não é
 # filtrado por senioridade — só é classificado, pra decidir isso na hora de
 # ler a notificação, não em deixar a vaga passar ou não.
@@ -96,6 +133,27 @@ class Job:
     local: str
     link: str
     site: str
+    # Data anunciada pela FONTE (não a data em que o JobRadar achou a vaga —
+    # essa já existe em vagas_vistas.encontrada_em). Sem isso não dá pra
+    # medir latência real (quanto tempo entre a vaga ser publicada e o
+    # JobRadar notificar) nem priorizar vaga recente na notificação. Formato
+    # livre (string), porque cada site anuncia diferente — data absoluta
+    # ("11/08", "11 de agosto de 2026"), timestamp ISO (Trampos), ou texto
+    # relativo ("Há 4 meses", "Contratando agora"). Normalizar tudo pra um
+    # formato único exigiria parser por site (relativo→absoluto), fora do
+    # escopo agora — string crua já é suficiente pra exibir na notificação e
+    # é o que a fonte realmente disse. "" quando o site não expõe a data.
+    publicado_em: str = ""
+    # Modalidade (Remoto/Híbrido/Presencial) como campo PRÓPRIO, preenchido
+    # pelo scraper na hora da extração. Antes vivia embutida dentro do texto
+    # de `local` (ex: "São Paulo - SP (Remoto)") e era redetectada por
+    # substring toda vez que combina_com() rodava — inclusive mais de uma
+    # vez pra mesma vaga, quando o pipeline internacional roda a mesma lista
+    # de vagas contra CIDADES_INTL e depois CIDADES_EUROPA_IBERICA. Detectar
+    # uma vez, na fonte, e guardar aqui elimina o retrabalho e mantém
+    # `local` só com informação de localização de verdade. Valores usados:
+    # "Remoto", "Híbrido", "Presencial", ou "" quando a fonte não expõe.
+    modalidade: str = ""
 
     @property
     def id(self) -> str:
@@ -168,6 +226,7 @@ class Job:
         """
         titulo_norm = _normalizar(self.titulo)
         local_norm = _normalizar(self.local)
+        modalidade_norm = _normalizar(self.modalidade)
 
         bate_forte = any(_contem_termo(_normalizar(k), titulo_norm) for k in keywords_forte)
 
@@ -182,8 +241,13 @@ class Job:
 
         bate_keyword = bate_forte or bate_ambiguo or bate_ferramenta
 
+        # Antes: _e_remoto(local_norm), redetectando por substring dentro de
+        # `local` toda vez que combina_com() rodava (inclusive mais de uma
+        # vez pra mesma vaga, no pipeline internacional). Agora o scraper
+        # já classifica a modalidade uma vez, na extração, e aqui só se lê o
+        # campo — sem reparsear texto.
         quer_remoto = any(_normalizar(c) in ("remoto", "remota") for c in cidades)
-        bate_remoto = quer_remoto and _e_remoto(local_norm)
+        bate_remoto = quer_remoto and modalidade_norm in ("remoto", "remota")
 
         bate_cidade = bate_remoto or any(
             _contem_termo(_normalizar(c), local_norm)

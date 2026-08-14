@@ -33,13 +33,20 @@ def enviar_mensagem(texto: str) -> bool:
 def notificar_vaga(job) -> bool:
     # TODO (Fase 3): incluir aqui a % de compatibilidade com o currículo,
     # calculada por IA, quando essa etapa for implementada.
+    #
+    # Linha de publicação só aparece quando a fonte expõe isso (nem toda
+    # expõe — ver Job.publicado_em / extrair_data_publicacao em job.py).
+    linha_publicacao = f"<b>Publicada:</b> {job.publicado_em}\n" if job.publicado_em else ""
+    linha_modalidade = f"<b>Modalidade:</b> {job.modalidade}\n" if job.modalidade else ""
     texto = (
         f"🚨 <b>Nova vaga encontrada!</b>\n\n"
         f"<b>Empresa:</b> {job.empresa}\n"
         f"<b>Cargo:</b> {job.titulo}\n"
         f"<b>Nível:</b> {job.senioridade}\n"
         f"<b>Local:</b> {job.local}\n"
-        f"<b>Site:</b> {job.site}\n\n"
+        f"{linha_modalidade}"
+        f"<b>Site:</b> {job.site}\n"
+        f"{linha_publicacao}\n"
         f"Encontrada agora\n\n"
         f"<b>Link:</b>\n{job.link}"
     )

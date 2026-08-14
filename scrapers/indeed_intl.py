@@ -1,9 +1,10 @@
 
 import time
+from urllib.parse import quote_plus
 
 from playwright.sync_api import sync_playwright
 
-from job import Job
+from job import Job, _e_remoto, _normalizar, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -41,7 +42,7 @@ class IndeedIntlScraper(BaseScraper):
     def _buscar_termo(self, termo: str, pais: str, dominio: str) -> list[Job]:
         logger.info(f"[Indeed Intl] Buscando: '{termo}' em {pais} ({dominio})")
         vagas: list[Job] = []
-        termo_url = termo.replace(" ", "+")
+        termo_url = quote_plus(termo)
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -90,18 +91,27 @@ class IndeedIntlScraper(BaseScraper):
                             local_el = card.query_selector('[data-testid="text-location"]')
                             local = local_el.inner_text().strip() if local_el else "Não informado"
 
+                            # Mesmo sinal usado no Indeed BR: sem campo de
+                            # modalidade próprio no card, então detecta pelo
+                            # texto de local quando o site já escreve isso.
+                            modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
+
                             link_el = card.query_selector("a[data-jk]")
                             jk = link_el.get_attribute("data-jk") if link_el else None
                             if not jk:
                                 continue
                             link = f"https://{dominio}/viewjob?jk={jk}"
 
+                            publicado_em = extrair_data_publicacao(card.inner_text())
+
                             vagas.append(Job(
                                 titulo=titulo,
                                 empresa=empresa,
                                 local=local,
                                 link=link,
+                                publicado_em=publicado_em,
                                 site=f"Indeed Internacional ({pais})",
+                                modalidade=modalidade,
                             ))
                         except Exception as e:
                             logger.warning(f"[Indeed Intl] Erro ao processar card: {e}")

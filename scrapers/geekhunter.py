@@ -1,11 +1,11 @@
 
 import re
 import time
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-from job import Job
+from job import Job, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -45,7 +45,11 @@ class GeekHunterScraper(BaseScraper):
     def _buscar_termo(self, termo: str) -> list[Job]:
         logger.info(f"[GeekHunter] Buscando: {termo}")
         vagas: list[Job] = []
-        termo_url = termo.replace(" ", "+")
+        # quote_plus (não um .replace(" ", "+") manual) porque termo pode ter
+        # caractere reservado de query string — ex: "BI & Analytics Analyst"
+        # tem "&", que sem escapar cortaria a URL no meio e criaria um
+        # parâmetro falso, quebrando a busca silenciosamente pra esse termo.
+        termo_url = quote_plus(termo)
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -58,8 +62,20 @@ class GeekHunterScraper(BaseScraper):
                     sem_resultados = False
                     try:
                         page.wait_for_selector('a[href*="/jobs/"]', timeout=15000)
-                    except Exception:
+                    except PlaywrightTimeoutError:
                         if pagina > 1:
+                            # Ver comentário equivalente em scrapers/gupy.py: timeout
+                            # de verdade é DIFERENTE de "acabaram as vagas" (isso é
+                            # sinalizado abaixo, quando a página carrega normal mas
+                            # devolve 0 cards). Sem separar os dois, a perda por
+                            # timeout ficava invisível — virava break silencioso
+                            # idêntico ao fim natural da paginação.
+                            logger.warning(
+                                f"[GeekHunter] Timeout esperando resultados na página "
+                                f"{pagina} de '{termo}' — parando de paginar por falha "
+                                "de carregamento, não por fim real dos resultados. "
+                                "Pode ter ficado vaga de página seguinte de fora."
+                            )
                             break
                         if "0 vagas disponíveis" in page.inner_text("body"):
                             logger.info(f"[GeekHunter] 0 resultados reais para '{termo}'.")
@@ -88,10 +104,7 @@ class GeekHunterScraper(BaseScraper):
                                 elif re.match(r"^🇧🇷", linha):
                                     cidade = linha.replace("🇧🇷", "").strip()
 
-                            if cidade:
-                                local = f"{cidade} ({modalidade})" if modalidade else cidade
-                            else:
-                                local = modalidade or "Não informado"
+                            local = cidade or "Não informado"
 
                             link = card.get_attribute("href")
                             if not link:
@@ -103,12 +116,16 @@ class GeekHunterScraper(BaseScraper):
                             if link.startswith("/"):
                                 link = f"https://www.geekhunter.com{link}"
 
+                            publicado_em = extrair_data_publicacao(card.inner_text())
+
                             vagas.append(Job(
                                 titulo=titulo,
                                 empresa=empresa,
                                 local=local,
                                 link=link,
                                 site="GeekHunter",
+                                publicado_em=publicado_em,
+                                modalidade=modalidade,
                             ))
                         except Exception as e:
                             logger.warning(f"[GeekHunter] Erro ao processar card: {e}")

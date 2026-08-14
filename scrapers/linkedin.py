@@ -1,9 +1,10 @@
 
 import time
+from urllib.parse import quote_plus
 
 from playwright.sync_api import sync_playwright
 
-from job import Job, _e_remoto, _normalizar
+from job import Job, _e_remoto, _normalizar, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -41,9 +42,10 @@ class LinkedInScraper(BaseScraper):
     Roda duas passadas por termo: uma nacional sem filtro de modalidade
     (pega vaga presencial/híbrida em cidade específica, cobre Recife/Natal/
     Maceió etc.) e outra com f_WT=2 (só vaga que o próprio LinkedIn marca
-    como remota). Essa segunda marca o campo `local` como remoto quando
-    necessário, porque o card não expõe isso sozinho (ver MAX_PAGINAS_REMOTO
-    acima).
+    como remota). Essa segunda marca o campo `modalidade` como "Remoto"
+    diretamente (o próprio LinkedIn já garante isso), porque o card nunca
+    expõe isso sozinho em texto (ver MAX_PAGINAS_REMOTO acima) — `local`
+    fica só com a cidade que o card mostra, mesmo pra vaga remota.
     """
 
     def __init__(self, termos_busca: list[str]):
@@ -62,7 +64,10 @@ class LinkedInScraper(BaseScraper):
         tag = "remoto (f_WT=2)" if remoto else "nacional"
         logger.info(f"[LinkedIn] Buscando ({tag}): {termo}")
         vagas: list[Job] = []
-        termo_url = termo.replace(" ", "+")
+        # quote_plus em vez de .replace(" ", "+") manual: termo pode ter "&"
+        # (ex: "BI & Analytics Analyst"), que sem escapar quebra a query
+        # string no meio e corrompe a busca silenciosamente.
+        termo_url = quote_plus(termo)
         max_paginas = MAX_PAGINAS_REMOTO if remoto else MAX_PAGINAS
 
         with sync_playwright() as p:
@@ -109,11 +114,14 @@ class LinkedInScraper(BaseScraper):
 
                             # f_WT=2 já garante que é vaga remota (o próprio
                             # LinkedIn classificou assim), mesmo quando o
-                            # campo local só mostra a cidade da empresa. Sem
-                            # isso, o filtro de cidade em job.py descartaria
-                            # a vaga por não achar "remoto" no local.
-                            if remoto and not _e_remoto(_normalizar(local)):
-                                local = f"Remoto ({local})" if local and local != "Não informado" else "Remoto"
+                            # campo local só mostra a cidade da empresa —
+                            # marca direto, sem precisar achar "remoto" no
+                            # texto do local. Passada nacional: só marca se o
+                            # próprio card organicamente disser isso no local.
+                            if remoto:
+                                modalidade = "Remoto"
+                            else:
+                                modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
 
                             link_el = card.query_selector("a.base-card__full-link")
                             link = link_el.get_attribute("href") if link_el else None
@@ -121,12 +129,16 @@ class LinkedInScraper(BaseScraper):
                                 continue
                             link = link.split("?")[0]
 
+                            publicado_em = extrair_data_publicacao(card.inner_text())
+
                             vagas.append(Job(
                                 titulo=titulo,
                                 empresa=empresa,
                                 local=local,
                                 link=link,
                                 site="LinkedIn",
+                                publicado_em=publicado_em,
+                                modalidade=modalidade,
                             ))
                         except Exception as e:
                             logger.warning(f"[LinkedIn] Erro ao processar card: {e}")

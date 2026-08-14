@@ -3,7 +3,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-from job import Job
+from job import Job, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -86,14 +86,16 @@ class SolidesScraper(BaseScraper):
                                 modalidade = texto_div
                                 break
 
-                        local = f"{cidade} ({modalidade})" if modalidade else cidade
+                        publicado_em = extrair_data_publicacao(card.inner_text())
 
                         vagas.append(Job(
                             titulo=titulo,
                             empresa=empresa or "Não informado",
-                            local=local,
+                            local=cidade,
                             link=link,
                             site="Solides",
+                            publicado_em=publicado_em,
+                            modalidade=modalidade,
                         ))
                     except Exception as e:
                         logger.warning(f"[Solides] Erro ao processar card: {e}")

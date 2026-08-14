@@ -32,7 +32,37 @@ def _garantir_coluna_chave_secundaria(conn):
         conn.execute("ALTER TABLE vagas_vistas ADD COLUMN chave_secundaria TEXT")
 
 
+def _garantir_coluna_publicado_em(conn):
+    """Mesma lógica de migração leve acima, pra Job.publicado_em (data
+    anunciada pela fonte). Precisa estar salva no banco, não só na
+    notificação — é o que permite medir latência de verdade depois (tempo
+    entre a fonte publicar e o JobRadar notificar), não só mostrar a data
+    uma vez e esquecer."""
+    colunas = [linha[1] for linha in conn.execute("PRAGMA table_info(vagas_vistas)")]
+    if "publicado_em" not in colunas:
+        conn.execute("ALTER TABLE vagas_vistas ADD COLUMN publicado_em TEXT")
+
+
+def _garantir_coluna_modalidade(conn):
+    """Mesma lógica de migração leve, pra Job.modalidade (Remoto/Híbrido/
+    Presencial como campo próprio, em vez de embutido no texto de local)."""
+    colunas = [linha[1] for linha in conn.execute("PRAGMA table_info(vagas_vistas)")]
+    if "modalidade" not in colunas:
+        conn.execute("ALTER TABLE vagas_vistas ADD COLUMN modalidade TEXT")
+
+
+class BancoVazioSuspeito(RuntimeError):
+    """jobs.db já existia em disco (tinha conteúdo) mas a tabela veio vazia
+    depois de iniciar_db() — não é primeiro uso, é banco perdido/corrompido/
+    resetado. Ver iniciar_db()."""
+
+
 def iniciar_db():
+    # Precisa checar ANTES de conectar: sqlite3.connect() já cria um arquivo
+    # vazio de 0 byte se o caminho não existir, o que destruiria o sinal que
+    # queremos capturar (arquivo existia com conteúdo real vs. nunca existiu).
+    arquivo_ja_existia = os.path.exists(DB_PATH) and os.path.getsize(DB_PATH) > 0
+
     with _conectar() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS vagas_vistas (
@@ -46,9 +76,37 @@ def iniciar_db():
             )
         """)
         _garantir_coluna_chave_secundaria(conn)
+        _garantir_coluna_publicado_em(conn)
+        _garantir_coluna_modalidade(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_vagas_chave_secundaria "
             "ON vagas_vistas (chave_secundaria)"
+        )
+        # Tabela chave/valor genérica — usada hoje só pra guardar a data do
+        # último heartbeat diário (ver notifier/telegram.py e main.py), mas
+        # serve pra qualquer estado simples que precise sobreviver entre
+        # ciclos sem virar coluna nova em vagas_vistas.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS metadados (
+                chave TEXT PRIMARY KEY,
+                valor TEXT
+            )
+        """)
+        total_vagas = conn.execute("SELECT COUNT(*) FROM vagas_vistas").fetchone()[0]
+
+    # Se o arquivo já existia com conteúdo mas a tabela veio vazia, não é
+    # primeiro uso — é banco sumido/corrompido/resetado (checkout falhou,
+    # commit ruim, etc.). Se o ciclo seguisse normal, TODA vaga encontrada
+    # bateria "não vista" e o sistema notificaria centenas de vagas antigas
+    # de uma vez, de repente. Primeiro uso de verdade (arquivo nunca
+    # existiu) não cai aqui — tabela vazia nesse caso é esperada.
+    if arquivo_ja_existia and total_vagas == 0:
+        raise BancoVazioSuspeito(
+            f"{DB_PATH} já existia em disco (tinha conteúdo) mas a tabela "
+            "vagas_vistas veio vazia — sinal de banco perdido, corrompido ou "
+            "resetado, não de primeiro uso. Abortando antes de rodar "
+            "qualquer busca, pra não notificar em massa vagas antigas como "
+            "se fossem novas."
         )
 
 
@@ -67,13 +125,32 @@ def ja_vista(job) -> bool:
         return cursor.fetchone() is not None
 
 
+def obter_metadado(chave: str) -> str | None:
+    with _conectar() as conn:
+        cursor = conn.execute("SELECT valor FROM metadados WHERE chave = ?", (chave,))
+        linha = cursor.fetchone()
+        return linha[0] if linha else None
+
+
+def definir_metadado(chave: str, valor: str):
+    with _conectar() as conn:
+        conn.execute(
+            "INSERT INTO metadados (chave, valor) VALUES (?, ?) "
+            "ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor",
+            (chave, valor),
+        )
+
+
 def salvar_vaga(job):
     with _conectar() as conn:
         conn.execute(
             """
             INSERT OR IGNORE INTO vagas_vistas
-                (id, titulo, empresa, local, link, site, chave_secundaria)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (id, titulo, empresa, local, link, site, chave_secundaria, publicado_em, modalidade)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (job.id, job.titulo, job.empresa, job.local, job.link, job.site, job.chave_secundaria),
+            (
+                job.id, job.titulo, job.empresa, job.local, job.link, job.site,
+                job.chave_secundaria, job.publicado_em, job.modalidade,
+            ),
         )

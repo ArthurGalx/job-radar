@@ -1,9 +1,9 @@
 
 import time
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-from job import Job
+from job import Job, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -49,9 +49,22 @@ class GupyScraper(BaseScraper):
                     sem_resultados = False
                     try:
                         page.wait_for_selector("a:has(h3)", timeout=15000)
-                    except Exception:
+                    except PlaywrightTimeoutError:
                         if pagina > 1:
-                            # Página além do fim: para de paginar esse termo.
+                            # Timeout de verdade (site lento, bloqueio) —
+                            # DIFERENTE de "acabaram as vagas", que é
+                            # sinalizado abaixo (página carrega normal mas
+                            # devolve 0 cards). Sem essa distinção, um
+                            # timeout na página 2/3 virava break silencioso
+                            # idêntico ao fim natural da paginação, e a vaga
+                            # que estaria nessa página se perdia sem deixar
+                            # rastro nenhum no log.
+                            logger.warning(
+                                f"[Gupy] Timeout esperando resultados na página {pagina} de "
+                                f"'{termo}' — parando de paginar por falha de carregamento, "
+                                "não por fim real dos resultados. Pode ter ficado vaga de "
+                                "página seguinte de fora."
+                            )
                             break
                         if "Nenhum resultado foi encontrado" in page.inner_text("body"):
                             logger.info(f"[Gupy] 0 resultados reais para '{termo}'.")
@@ -89,18 +102,20 @@ class GupyScraper(BaseScraper):
                                     modelo = texto_span
                                     break
 
-                            local = f"{cidade} ({modelo})" if modelo else cidade
-
                             link = card.get_attribute("href")
                             if not link:
                                 continue
 
+                            publicado_em = extrair_data_publicacao(card.inner_text())
+
                             vagas.append(Job(
                                 titulo=titulo,
                                 empresa=empresa,
-                                local=local,
+                                local=cidade,
                                 link=link,
                                 site="Gupy",
+                                publicado_em=publicado_em,
+                                modalidade=modelo,
                             ))
                         except Exception as e:
                             logger.warning(f"[Gupy] Erro ao processar card: {e}")

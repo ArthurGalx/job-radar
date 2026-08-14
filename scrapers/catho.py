@@ -3,7 +3,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-from job import Job, _e_remoto, _normalizar
+from job import Job, _e_remoto, _normalizar, extrair_data_publicacao
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -26,8 +26,8 @@ class CathoScraper(BaseScraper):
     aparecendo já na busca sem filtro nenhum aplicado). Por isso, em vez de
     automatizar o filtro (frágil, seletor duplicado por categoria de filtro)
     ou abrir cada vaga (caro), verifica o sinal de remoto no título e, se
-    achar, marca isso no campo `local` — é o mesmo campo que o filtro de
-    cidade em job.py já lê.
+    achar, marca isso no campo `modalidade` (não em `local` — local guarda só
+    a cidade que o card mostra, mesmo pra vaga remota).
     """
 
     def __init__(self, termos_busca: list[str]):
@@ -92,8 +92,12 @@ class CathoScraper(BaseScraper):
 
                         # Título já entrega o sinal de remoto que o card não
                         # expõe em campo próprio (ver docstring da classe).
-                        if _e_remoto(_normalizar(titulo)) and not _e_remoto(_normalizar(local)):
-                            local = f"Remoto ({local})" if local and local != "Não informado" else "Remoto"
+                        # Sem distinção híbrido/presencial possível por essa via.
+                        modalidade = ""
+                        if _e_remoto(_normalizar(titulo)) or _e_remoto(_normalizar(local)):
+                            modalidade = "Remoto"
+
+                        publicado_em = extrair_data_publicacao(card.inner_text())
 
                         vagas.append(Job(
                             titulo=titulo,
@@ -101,6 +105,8 @@ class CathoScraper(BaseScraper):
                             local=local,
                             link=link,
                             site="Catho",
+                            publicado_em=publicado_em,
+                            modalidade=modalidade,
                         ))
                     except Exception as e:
                         logger.warning(f"[Catho] Erro ao processar card: {e}")
