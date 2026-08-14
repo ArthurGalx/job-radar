@@ -700,6 +700,47 @@ class RegrasFiltro:
 
 
 @dataclass
+class _Avaliacao:
+    """Resultado intermediário de Job._avaliar() — reaproveitado por
+    combina_com() (filtro, decide passa/não passa) e pontuar_relevancia()
+    (score, só ordena o que já passou). Extraído pra um lugar só depois de
+    escopo_rejeitado_por_mercado ter precisado refazer parte da mesma conta
+    separadamente (ver MEDIDO lá) — mais um método calculando a mesma coisa
+    de outro jeito é exatamente o padrão que já causou bug real nesta base
+    (ver extrair_escopo_remoto)."""
+    aprovada: bool
+    bate_forte: bool
+    bate_ambiguo: bool
+    bate_ferramenta: bool
+    bate_remoto: bool
+    escopos: set[str]
+    mercado_confirmado: bool  # escopo bateu explicitamente um mercado aceito
+    idioma_bateu_titulo: bool
+
+
+# Pesos do score de relevância (pontuar_relevancia, máximo 10) — soma
+# simples, sem aprendizado de máquina: o conjunto de sinais é pequeno (5) e
+# o peso de cada um já é conhecido, não precisa de modelo pra isso. NÃO é
+# filtro — só ordena o que já passou combina_com(). MEDIDO: com ~320
+# vaga/dia aprovada (item 01 do perfil internacional sozinho já passou de
+# 10/dia pra isso), toda vaga chegava com o mesmo destaque no Telegram, a
+# ideal e a tolerável lado a lado sem diferença nenhuma.
+_PESO_CARGO_FORTE = 3
+_PESO_CARGO_AMBIGUO = 2
+_PESO_FERRAMENTA = 2
+_PESO_SENIORIDADE_ALVO = 2
+_PESO_SENIORIDADE_NEUTRA = 1  # título sem nível classificável — não penaliza por falta de informação
+_PESO_MERCADO = 2
+_PESO_MERCADO_NAO_CONFIRMADO = 1  # remota sem mercado declarado no texto (aceita por padrão, sem confirmar)
+_PESO_IDIOMA = 1
+
+# Prioridade definida pelo usuário: Júnior e Pleno pontuam o teto de
+# senioridade. Estágio/Sênior/Especialista/Liderança pontuam 0 (fora do
+# alvo, não é filtro — a vaga ainda notifica, só com destaque menor).
+_NIVEIS_SENIORIDADE_ALVO = {"Júnior", "Pleno"}
+
+
+@dataclass
 class Job:
     titulo: str
     empresa: str
@@ -741,6 +782,10 @@ class Job:
     # reflete). Mantém `local` preenchido pra exibir na notificação — só
     # tira ele da checagem de mercado.
     escopo_indefinido: bool = False
+    # Score de pontuar_relevancia() (0-10), preenchido por filtrar_vagas()
+    # depois que a vaga passa combina_com() — 0 até lá (nunca usado sozinho
+    # pra decidir nada, só pra ORDENAR/destacar na notificação).
+    relevancia: int = 0
 
     def __post_init__(self):
         """Sobrepõe modalidade="Remoto" quando o TÍTULO contradiz (Híbrido/
@@ -848,6 +893,12 @@ class Job:
           (Product Analyst, CRM Analyst, Marketing Analyst) sem cada um virar
           fonte de ruído sozinho.
         """
+        return self._avaliar(regras).aprovada
+
+    def _avaliar(self, regras: RegrasFiltro) -> _Avaliacao:
+        """Faz a conta completa uma vez só — combina_com() e
+        pontuar_relevancia() leem o mesmo resultado, em vez de cada um
+        recalcular por conta própria (ver MEDIDO em _Avaliacao)."""
         titulo_norm = _normalizar(self.titulo)
         local_norm = _normalizar(self.local)
         modalidade_norm = _normalizar(self.modalidade)
@@ -931,10 +982,12 @@ class Job:
         # acima com escopos não-vazio, é porque já bateu um mercado
         # aceito). Só entra em jogo quando escopos está vazio (remoto sem
         # mercado declarado nenhum) — aí exige idioma/mercado no título.
+        idioma_bateu_titulo = regras.idiomas_exigidos is not None and any(
+            _contem_termo(_normalizar(i), titulo_norm) for i in regras.idiomas_exigidos
+        )
+
         if bate_remoto and regras.idiomas_exigidos is not None and not escopos:
-            if not any(
-                _contem_termo(_normalizar(i), titulo_norm) for i in regras.idiomas_exigidos
-            ):
+            if not idioma_bateu_titulo:
                 bate_remoto = False
 
         bate_cidade = bate_remoto or any(
@@ -943,7 +996,68 @@ class Job:
             if _normalizar(c) not in _FLAGS_REMOTO
         )
 
-        return bate_keyword and bate_cidade
+        return _Avaliacao(
+            aprovada=bate_keyword and bate_cidade,
+            bate_forte=bate_forte,
+            bate_ambiguo=bate_ambiguo,
+            bate_ferramenta=bate_ferramenta,
+            bate_remoto=bate_remoto,
+            escopos=escopos,
+            mercado_confirmado=bate_remoto and bool(escopos),
+            idioma_bateu_titulo=idioma_bateu_titulo,
+        )
+
+    def pontuar_relevancia(self, regras: RegrasFiltro) -> int:
+        """Score de 0 a 10 pra ORDENAR vagas que já passaram combina_com()
+        — não filtra nada, não muda quantas vagas notificam. Soma simples de
+        pontos por sinal, sem aprendizado de máquina (conjunto pequeno,
+        conhecido — não precisa de modelo).
+
+        - Cargo no título: 3 se bateu keyword forte, 2 se bateu só o par
+          ambíguo+qualificador, 0 se só bateu por ferramenta (sem cargo
+          nenhum no título).
+        - Ferramenta no título (Power BI, SQL, Python...): 2.
+        - Senioridade compatível: Júnior/Pleno (prioridade do usuário) = 2;
+          título sem nível classificável = 1 (não penaliza por falta de
+          informação); Estágio/Sênior/Especialista/Liderança = 0.
+        - Mercado: 2 quando não é remota (bate por cidade concreta — o
+          mercado É a cidade buscada) ou quando é remota com escopo batendo
+          um mercado aceito explicitamente; 1 quando é remota sem mercado
+          declarado no texto (aceita por padrão, sem confirmação).
+        - Idioma: 1 quando o perfil exige idioma E o título afirma isso
+          explicitamente (sinal direto, não só herdado do mercado); 0 caso
+          contrário.
+        """
+        av = self._avaliar(regras)
+
+        if av.bate_forte:
+            pontos_cargo = _PESO_CARGO_FORTE
+        elif av.bate_ambiguo:
+            pontos_cargo = _PESO_CARGO_AMBIGUO
+        else:
+            pontos_cargo = 0
+
+        pontos_ferramenta = _PESO_FERRAMENTA if av.bate_ferramenta else 0
+
+        nivel = self.senioridade
+        if nivel in _NIVEIS_SENIORIDADE_ALVO:
+            pontos_senioridade = _PESO_SENIORIDADE_ALVO
+        elif nivel == "Não especificado" or nivel.startswith("Nível "):
+            pontos_senioridade = _PESO_SENIORIDADE_NEUTRA
+        else:
+            pontos_senioridade = 0
+
+        if not av.bate_remoto or av.mercado_confirmado:
+            pontos_mercado = _PESO_MERCADO
+        else:
+            pontos_mercado = _PESO_MERCADO_NAO_CONFIRMADO
+
+        pontos_idioma = _PESO_IDIOMA if av.idioma_bateu_titulo else 0
+
+        return (
+            pontos_cargo + pontos_ferramenta + pontos_senioridade
+            + pontos_mercado + pontos_idioma
+        )
 
     def escopo_rejeitado_por_mercado(self, regras: RegrasFiltro) -> set[str] | None:
         """Só pra diagnóstico/log (ver utils/filtro.py) — refaz o mesmo

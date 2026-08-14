@@ -14,6 +14,7 @@ def filtrar_vagas(vagas: list[Job], regras: RegrasFiltro) -> tuple[list[Job], Co
     descartes_escopo: Counter = Counter()
     for v in vagas:
         if v.combina_com(regras):
+            v.relevancia = v.pontuar_relevancia(regras)
             aprovadas.append(v)
         else:
             escopo = v.escopo_rejeitado_por_mercado(regras)

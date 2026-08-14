@@ -49,6 +49,20 @@ def enviar_mensagem(texto: str) -> bool:
         return False
 
 
+def _linha_relevancia(pontos: int) -> str:
+    """Renderiza Job.relevancia (0-10, ver pontuar_relevancia em job.py) como
+    estrelas — 10 pontos vira 5 estrelas, arredondado (6/10 vira 3, não 2.5).
+    Não é filtro, só destaque visual pra priorizar leitura entre as vagas
+    aprovadas do ciclo (item 07 da auditoria: com ~320 vaga/dia, tudo
+    chegava com o mesmo destaque)."""
+    # (pontos + 1) // 2 em vez de round(pontos / 2): round() do Python
+    # arredonda .5 pro par mais próximo (5/10 vira 2 estrelas, 7/10 vira 4)
+    # — inconsistente e contraintuitivo pra quem só olha o emoji. Assim
+    # sempre arredonda .5 pra cima (5/10 = 3, 7/10 = 4, sempre igual).
+    cheias = (pontos + 1) // 2
+    return "⭐" * cheias + "☆" * (5 - cheias) + f" ({pontos}/10)"
+
+
 def notificar_vaga(job) -> bool:
     # TODO (Fase 3): incluir aqui a % de compatibilidade com o currículo,
     # calculada por IA, quando essa etapa for implementada.
@@ -59,6 +73,7 @@ def notificar_vaga(job) -> bool:
     linha_modalidade = f"<b>Modalidade:</b> {job.modalidade}\n" if job.modalidade else ""
     texto = (
         f"🚨 <b>Nova vaga encontrada!</b>\n\n"
+        f"<b>Relevância:</b> {_linha_relevancia(job.relevancia)}\n"
         f"<b>Empresa:</b> {job.empresa}\n"
         f"<b>Cargo:</b> {job.titulo}\n"
         f"<b>Nível:</b> {job.senioridade}\n"
@@ -85,6 +100,7 @@ def notificar_vaga_exploratoria(job) -> bool:
     linha_modalidade = f"<b>Modalidade:</b> {job.modalidade}\n" if job.modalidade else ""
     texto = (
         f"🧭 <b>Vaga exploratória (Portugal/Espanha)</b>\n\n"
+        f"<b>Relevância:</b> {_linha_relevancia(job.relevancia)}\n"
         f"<b>Empresa:</b> {job.empresa}\n"
         f"<b>Cargo:</b> {job.titulo}\n"
         f"<b>Nível:</b> {job.senioridade}\n"
