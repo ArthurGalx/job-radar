@@ -307,7 +307,7 @@ def _mercado_correspondente(candidato: str) -> str:
     return candidato
 
 
-def extrair_escopo_remoto(texto_local: str) -> str:
+def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> str:
     """Deriva o mercado geográfico de uma vaga remota a partir do texto de
     `local`, quando a fonte expõe isso ali (ex: "Remote — US only", "Remote,
     Brazil"). Retorna o nome canônico do mercado ("Estados Unidos", "Índia",
@@ -321,14 +321,30 @@ def extrair_escopo_remoto(texto_local: str) -> str:
     outro valor não-vazio que não esteja em mercados_remoto_aceitos é
     rejeitado, mesmo quando esse valor é um país que o dicionário não
     reconhece — ver _mercado_correspondente.
+
+    MEDIDO: desde que modalidade virou campo próprio do Job (scraper não
+    escreve mais "Remoto" dentro de `local`), toda essa extração ficava
+    inalcançável pra fonte com filtro nativo — LinkedIn (f_WT=2) e
+    WeWorkRemotely confirmam via `modalidade`, não mais via texto, então
+    `local` chega aqui como só "New York, NY" ou "Bangalore, India", sem a
+    raiz "remot" nenhuma. Sem o parâmetro `modalidade`, _PADRAO_ESCOPO_SEPARADOR
+    nunca casava e a função devolvia "" (sem restrição) pra QUALQUER vaga
+    remota confirmada por campo — inclusive as americanas/indianas/etc que
+    esse fix inteiro existe pra barrar. Quando não há separador no texto
+    mas `modalidade` já diz remoto, trata `local` INTEIRO como candidato de
+    escopo (a fonte confirmou modalidade por fora; o que sobra em `local` é
+    só a âncora geográfica, sem precisar achar "remot" dentro dele).
     """
     texto_norm = _normalizar(texto_local)
+    modalidade_norm = _normalizar(modalidade)
     m = _PADRAO_ESCOPO_SEPARADOR.search(texto_norm)
-    if not m:
+    if m:
+        resto = texto_norm[m.end():]
+        resto = re.split(r"[)\n]", resto)[0]
+    elif modalidade_norm in ("remoto", "remota"):
+        resto = texto_norm
+    else:
         return ""
-
-    resto = texto_norm[m.end():]
-    resto = re.split(r"[)\n]", resto)[0]
 
     # Formato "Cidade, SIGLA" (ex: "new york, ny") — a sigla de estado
     # depois da vírgula é o sinal de mercado aqui, não o nome da cidade
@@ -557,8 +573,14 @@ class Job:
         o texto não declara restrição nenhuma (remoto "puro", ou vaga que
         nem é remota). Só informativo por si só; combina_com() é quem decide
         se rejeita com base em RegrasFiltro.mercados_remoto_aceitos.
+
+        Passa `self.modalidade` junto: fonte com filtro nativo (LinkedIn
+        f_WT=2, WeWorkRemotely) confirma remoto por esse campo, não mais
+        escrevendo "Remoto" dentro de `local` — sem isso, extrair_escopo_remoto
+        nunca achava o separador "remot..." no texto e devolvia "" (sem
+        restrição) pra vaga remota confirmada, mesmo vinda dos EUA/Índia/etc.
         """
-        return extrair_escopo_remoto(self.local)
+        return extrair_escopo_remoto(self.local, self.modalidade)
 
     def combina_com(self, regras: RegrasFiltro) -> bool:
         """Verifica se a vaga bate com pelo menos uma keyword E uma cidade/modalidade.
