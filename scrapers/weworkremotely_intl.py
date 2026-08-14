@@ -76,14 +76,40 @@ class WeWorkRemotelyIntlScraper(BaseScraper):
                 # "attached" é suficiente aqui porque o card já existe no
                 # DOM assim que goto() retorna, sem precisar esperar
                 # pintura completa.
+                #
+                # MEDIDO: o except em volta do wait_for_selector original
+                # capturava QUALQUER exceção (timeout incluído) e logava
+                # "0 resultados" pra todas — sem diferenciar "site
+                # confirmou zero vaga" de "não consegui nem confirmar".
+                # Confirmado ao vivo (Claude in Chrome): busca sem
+                # resultado nenhum (termo inexistente) renderiza
+                # <div class="advanced_no_results"> no DOM — sinal
+                # estrutural estável, não depende de texto em inglês que
+                # pode mudar. Esperando os dois seletores ao mesmo tempo:
+                # se nenhum aparecer em 15s, é timeout/bloqueio de
+                # verdade (warning, não "0 resultados"); se
+                # advanced_no_results aparecer e não houver card, é zero
+                # confirmado pelo próprio site.
                 try:
-                    page.wait_for_selector("li.new-listing-container", state="attached", timeout=15000)
+                    page.wait_for_selector(
+                        "li.new-listing-container, div.advanced_no_results",
+                        state="attached",
+                        timeout=15000,
+                    )
                 except Exception:
-                    logger.info(f"[WeWorkRemotely Intl] 0 resultados para '{termo}'.")
+                    logger.warning(
+                        f"[WeWorkRemotely Intl] Timeout em '{termo}' — nem vaga nem "
+                        "confirmação de busca vazia apareceu em 15s (possível "
+                        "bloqueio/anti-bot, não é 0 vaga confirmado)."
+                    )
                     return vagas
                 time.sleep(2)
 
                 cards = page.query_selector_all("li.new-listing-container")
+                if not cards:
+                    logger.info(f"[WeWorkRemotely Intl] 0 resultados confirmados para '{termo}'.")
+                    return vagas
+
                 for card in cards:
                     try:
                         titulo_el = card.query_selector(".new-listing__header__title")
