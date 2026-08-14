@@ -66,10 +66,23 @@ jobs:
           # primeiro, o push abaixo é rejeitado. Em vez de falhar o run
           # (o que faria a vaga ser notificada de novo no próximo ciclo),
           # sincroniza e tenta de novo. data/jobs.db é binário (SQLite):
-          # em caso de conflito, "-X ours" mantém a versão deste run
-          # (base + vagas encontradas agora) — na pior hipótese, uma vaga
-          # marcada só do outro lado é notificada mais uma vez, sem perda
-          # real de dado.
+          # em caso de conflito, quem deve vencer é a versão deste run
+          # (base + vagas encontradas agora), não a de origin/main.
+          #
+          # MEDIDO: estava "-X ours", que em `git merge` de fato mantém o
+          # lado local — mas em `git rebase` a semântica é invertida: o
+          # rebase reaplica os commits deste run EM CIMA de origin/main, e
+          # nesse processo "ours" passa a se referir à branch de destino
+          # (origin/main), "theirs" ao commit sendo reaplicado (este run).
+          # Confirmado com um repositório de teste isolado: rebase com
+          # "-X ours" manteve o conteúdo do upstream, descartando o local.
+          # Resultado real: toda vez que o push colidia, o jobs.db commitado
+          # voltava a ser o de origin/main — vaga encontrada e notificada
+          # neste run desaparecia do banco (reaparecia como "nova" no ciclo
+          # seguinte) e qualquer backfill de coluna (ex: chave_secundaria)
+          # também era descartado, mesmo rodando com sucesso a cada
+          # iniciar_db(). Corrigido para "-X theirs" — mesmo teste isolado,
+          # resultado contrário: manteve a versão deste run.
           n=0
           until git push; do
             n=$((n + 1))
@@ -79,6 +92,6 @@ jobs:
             fi
             echo "Push rejeitado, sincronizando (tentativa $n)..."
             git fetch origin main
-            git rebase origin/main -X ours || git rebase --abort
+            git rebase origin/main -X theirs || git rebase --abort
             sleep $((RANDOM % 5 + 1))
           done
