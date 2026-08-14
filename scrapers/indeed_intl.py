@@ -4,7 +4,7 @@ from urllib.parse import quote_plus
 
 from playwright.sync_api import sync_playwright
 
-from job import Job, extrair_data_publicacao
+from job import Job, extrair_data_publicacao, _e_remoto, _normalizar
 from logger import get_logger
 from scrapers.base import BaseScraper
 
@@ -15,18 +15,20 @@ logger = get_logger()
 MAX_PAGINAS = 1
 
 # Filtro nativo de "Remoto"/"Teletrabajo"/"Home office" do próprio Indeed —
-# mesmo espírito do f_WT=2 do LinkedIn (ver scrapers/linkedin.py). CONFIRMADO
-# AO VIVO (Claude in Chrome) em es.indeed.com e mx.indeed.com: aplicar o
-# filtro "Remoto"/"Home office" pela UI gera essa URL. Sem isso, a busca
-# baixava toda vaga do domínio do país (~1000 resultados pro termo testado)
-# e descartava a maioria por não ter sinal de remoto no texto do local — o
-# perfil internacional só aceita remoto, então quase tudo que era baixado
-# ia pro lixo. Mesmo código funcionou nos dois domínios testados (es./mx.),
-# indício de que é uma categoria compartilhada entre os domínios do Indeed,
-# não algo específico por país — mas só es./mx. foram confirmados ao vivo
-# nesta sessão; se algum dos outros 4 (pt./co./ar./cl.) voltar 0 vaga de
-# forma persistente em todos os termos, vale reconferir esse específico.
+# mesmo espírito do f_WT=2 do LinkedIn (ver scrapers/linkedin.py).
 FILTRO_REMOTO = "&sc=0kf%3Aattr%28DSQF7%29%3B"
+
+# MEDIDO ao vivo (Claude in Chrome, rodando --perfil internacional --once e
+# inspecionando cada domínio direto): es./pt./mx. aceitam FILTRO_REMOTO
+# normalmente. co./ar./cl. NUNCA retornam card com ele — 100% das buscas
+# (10 termos distintos, todos os 3 domínios) vieram vazias no log real, e a
+# inspeção manual confirmou a causa: não é bloqueio anti-bot (a busca SEM o
+# filtro devolve vaga real, ex.: "Data Analyst – Power BI" em Bogotá,
+# "Data Analyst – SQL/Python/Power BI" em Buenos Aires) — é o filtro em si
+# que não existe nesses domínios. O dropdown "Tipo de empleo" desses 3 nem
+# lista opção de remoto/teletrabajo pra escolher pela UI. Aplicar o
+# parâmetro mesmo assim não filtra nada: zera o resultado inteiro.
+PAISES_SEM_FILTRO_REMOTO_NATIVO = {"Colômbia", "Argentina", "Chile"}
 
 
 class IndeedIntlScraper(BaseScraper):
@@ -70,10 +72,12 @@ class IndeedIntlScraper(BaseScraper):
                 "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })"
             )
 
+            usa_filtro_nativo = pais not in PAISES_SEM_FILTRO_REMOTO_NATIVO
             try:
                 for pagina in range(MAX_PAGINAS):
                     start = pagina * 10
-                    url = f"https://{dominio}/jobs?q={termo_url}&l=&start={start}{FILTRO_REMOTO}"
+                    filtro = FILTRO_REMOTO if usa_filtro_nativo else ""
+                    url = f"https://{dominio}/jobs?q={termo_url}&l=&start={start}{filtro}"
                     page.goto(url, timeout=60000)
                     try:
                         page.wait_for_selector(".job_seen_beacon", state="attached", timeout=25000)
@@ -81,9 +85,7 @@ class IndeedIntlScraper(BaseScraper):
                         if pagina == 0:
                             logger.warning(
                                 f"[Indeed Intl] Nenhum card em {pais} ({dominio}) — "
-                                "possível bloqueio anti-bot, 0 vaga real, ou FILTRO_REMOTO "
-                                "não reconhecido nesse domínio (só es./mx. confirmados ao "
-                                "vivo — ver comentário em FILTRO_REMOTO)."
+                                "possível bloqueio anti-bot ou 0 vaga real pro termo."
                             )
                         break
                     time.sleep(2)
@@ -107,13 +109,18 @@ class IndeedIntlScraper(BaseScraper):
                             local_el = card.query_selector('[data-testid="text-location"]')
                             local = local_el.inner_text().strip() if local_el else "Não informado"
 
-                            # FILTRO_REMOTO já garante que é vaga remota (o
-                            # próprio Indeed classificou assim) — marca
-                            # direto, sem depender do texto de local, que
-                            # muitas vezes só mostra a cidade sem dizer
-                            # "remoto"/"teletrabajo" (mesmo motivo do
-                            # f_WT=2 no LinkedIn).
-                            modalidade = "Remoto"
+                            # Onde o filtro nativo existe (es./pt./mx.), ele
+                            # já garante que é vaga remota — marca direto,
+                            # sem depender do texto de local (mesmo motivo
+                            # do f_WT=2 no LinkedIn). Onde não existe (co./
+                            # ar./cl. — ver PAISES_SEM_FILTRO_REMOTO_NATIVO),
+                            # a busca veio sem filtro nenhum (presencial +
+                            # híbrida + remota juntas), então precisa do
+                            # sinal de texto pra não marcar tudo como remoto.
+                            if usa_filtro_nativo:
+                                modalidade = "Remoto"
+                            else:
+                                modalidade = "Remoto" if _e_remoto(_normalizar(local)) else ""
 
                             link_el = card.query_selector("a[data-jk]")
                             jk = link_el.get_attribute("data-jk") if link_el else None
