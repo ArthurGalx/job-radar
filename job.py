@@ -108,7 +108,6 @@ def _modalidade_pelo_titulo(titulo: str) -> str | None:
 _MERCADOS_REMOTO = {
     "us": "Estados Unidos",
     "usa": "Estados Unidos",
-    "u.s": "Estados Unidos",
     "united states": "Estados Unidos",
     "estados unidos": "Estados Unidos",
     "eua": "Estados Unidos",
@@ -190,10 +189,30 @@ _MERCADOS_REMOTO = {
 # projeto (mercado hispanofalante/lusófono), não uma garantia.
 _CIDADES_MERCADO = {
     "lisboa": "Portugal",
+    "lisbon": "Portugal",  # grafia inglesa, comum em card do LinkedIn
     "porto": "Portugal",
     "madrid": "Espanha",
     "barcelona": "Espanha",
     "valencia": "Espanha",
+    "bilbao": "Espanha",
+    # Comunidade autônoma/região espanhola — mesmo tratamento de cidade
+    # (candidato inteiro igual à chave, sem risco de substring cruzado
+    # com outro país, já que nenhuma colide).
+    "catalunya": "Espanha",
+    "cataluna": "Espanha",  # "Catalunya"/"Cataluña" sem acento
+    "andalucia": "Espanha",
+    "galicia": "Espanha",
+    "pais vasco": "Espanha",
+    "euskadi": "Espanha",
+    "canarias": "Espanha",
+    "sevilla": "Espanha",
+    "malaga": "Espanha",
+    "lugo": "Espanha",
+    "vizcaya": "Espanha",
+    "bizkaia": "Espanha",
+    "guipuzcoa": "Espanha",
+    "gipuzkoa": "Espanha",
+    "leiria": "Portugal",
     "cidade do mexico": "México",
     "ciudad de mexico": "México",
     "guadalajara": "México",
@@ -242,6 +261,17 @@ _MERCADOS_SEM_RESTRICAO = {"anywhere", "worldwide", "global"}
 _PALAVRAS_IGNORAR_ESCOPO = {
     "only", "based", "timezone", "timezones", "time", "zone", "zones",
     "somente", "apenas",
+    # MEDIDO: "Greater Buenos Aires", "Medellín Metropolitan Area", "Porto
+    # Metropolitan Area", "Madrid, Madrid provincia" — formato comum de
+    # local do LinkedIn pra cidade da Ibéria/LATAM, mas "greater"/
+    # "metropolitan"/"area"/"provincia" sobrando no meio impedia bater
+    # contra _CIDADES_MERCADO (que exige igualdade do candidato inteiro).
+    # NÃO é o mesmo risco do comentário abaixo sobre "Greater Seattle
+    # Area" virar aceito sem querer: aqui a palavra só é REMOVIDA do
+    # candidato antes de checar contra a lista fechada de cidades
+    # aceitas — "seattle" continua não estando nela, então "Greater
+    # Seattle Area" continua caindo em "não reconhecido" normalmente.
+    "greater", "metropolitan", "metropolitana", "area", "provincia",
 }
 
 # Palavras em português que indicam descrição de ABRANGÊNCIA dentro do
@@ -359,6 +389,22 @@ _CAPITAIS_BRASIL = {
     "boa vista", "florianopolis", "sao paulo", "aracaju", "palmas",
 }
 
+# MEDIDO: "Monterrey, N.L.", "Cuauhtémoc, CDMX", "León, Gto.", "Ciudad
+# Juárez, Chih.", "Guadalajara, Jal.", "San Luis Potosí, S.L.P." — mesmo
+# formato "Cidade, SIGLA" do card americano/brasileiro, mas o LinkedIn
+# nunca resolvia porque não existia sigla mexicana nenhuma cadastrada.
+# Sem colisão com _SIGLAS_UF_BRASIL/_SIGLAS_ESTADOS_EUA (nenhuma bate
+# igual), então checa direto, sem precisar de desambiguação por cidade
+# como as 6 UFs brasileiras ambíguas. Ponto já foi removido de `texto_norm`
+# antes de chegar aqui (ver extrair_escopo_remoto), então "n.l"/"s.l.p"
+# chegam como "nl"/"slp".
+_SIGLAS_ESTADOS_MEXICO = {
+    "ags", "bc", "bcs", "cam", "chis", "chih", "coah", "col", "cdmx",
+    "dgo", "gto", "gro", "hgo", "jal", "mex", "mich", "mor", "nay", "nl",
+    "oax", "pue", "qro", "qroo", "slp", "sin", "son", "tab", "tamps",
+    "tlax", "ver", "yuc", "zac",
+}
+
 
 def _mercados_correspondentes(candidato: str) -> set[str]:
     """Devolve TODOS os mercados que o candidato menciona, não só o
@@ -442,6 +488,14 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> set[str]:
     montar o candidato.
     """
     texto_norm = _normalizar(texto_local)
+    # MEDIDO: abreviação de estado com ponto ("N.L.", "S.L.P.", "Gto.",
+    # "Chih.") sobrevivia ao _normalizar (que só mexe em caixa/acento) e
+    # nunca batia contra sigla nenhuma (_SIGLAS_UF_MEXICO abaixo usa forma
+    # sem ponto). Remove ponto do texto inteiro, cedo — mais simples que
+    # tratar em cada abreviação/dicionário separadamente. "u.s" deixou de
+    # ser alcançável em _MERCADOS_REMOTO por causa disso (a chave "us" já
+    # cobre o mesmo caso), removida de lá.
+    texto_norm = texto_norm.replace(".", "")
     modalidade_norm = _normalizar(modalidade)
     m = _PADRAO_ESCOPO_SEPARADOR.search(texto_norm)
     if m:
@@ -470,6 +524,8 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> set[str]:
                 return {"Brasil"}
         if seg in _SIGLAS_ESTADOS_EUA:
             return {"Estados Unidos"}
+        if seg in _SIGLAS_ESTADOS_MEXICO:
+            return {"México"}
 
     # Nome de mercado por extenso também pode vir DEPOIS da cidade, não só
     # antes ("Florida, United States" — cortar no primeiro segmento, como
@@ -479,10 +535,26 @@ def extrair_escopo_remoto(texto_local: str, modalidade: str = "") -> set[str]:
     # original — _mercados_correspondentes já faz busca por substring com
     # borda de palavra, então acha todo nome de mercado presente, em
     # qualquer posição.
+    # MEDIDO: "08015, Barcelona, Barcelona provincia" — código postal
+    # espanhol na frente vira palavra solta no candidato ("08015 barcelona
+    # barcelona"), nunca bate em nenhuma chave. Puramente numérico nunca é
+    # nome de mercado, então descarta direto.
     palavras = [
-        p.strip(".") for p in resto.replace(",", " ").split()
-        if p.strip(".") not in _PALAVRAS_IGNORAR_ESCOPO
+        p for p in resto.replace(",", " ").split()
+        if p not in _PALAVRAS_IGNORAR_ESCOPO and not p.isdigit()
     ]
+
+    # MEDIDO: formato espanhol "Cidade, Cidade provincia" (província tem o
+    # mesmo nome da capital na maioria dos casos — "Madrid, Madrid
+    # provincia", "Barcelona, Barcelona provincia") sobra como palavra
+    # repetida depois de tirar "provincia" acima ("madrid madrid"), que
+    # nunca bate IGUALDADE contra _CIDADES_MERCADO (que tem só "madrid").
+    # Candidato com todas as palavras iguais colapsa pra uma só — não
+    # afeta cidade composta de palavras DIFERENTES ("buenos aires",
+    # "porto alegre"), só o caso degenerado de repetição.
+    if len(set(palavras)) == 1:
+        palavras = palavras[:1]
+
     candidato = " ".join(palavras).strip()
 
     if not candidato:
