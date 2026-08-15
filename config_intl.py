@@ -60,6 +60,28 @@ TERMOS_BUSCA_INTL = [
     "data analyst spanish market",
     "business intelligence spanish markets",
     "analista de datos remoto",
+    # MEDIDO ao vivo: vaga real ("Business Analyst (Colombia) - Remote",
+    # Connect Tech+Talent) aparece em location=Colombia&f_WT=2 pro termo
+    # bare "business analyst" — testei "spanish speaker", "business
+    # intelligence spanish speaker", "remote data analyst latin america" e
+    # "latam" contra a mesma vaga, location e filtro remoto: nenhum achou
+    # (o anúncio não repete nenhuma dessas frases). O comentário original
+    # lá em cima ("não faz sentido buscar só 'data analyst' sozinho, é o
+    # mundo inteiro sem idioma") não vale AQUI: todo termo desta lista já
+    # roda escopado por país (LOCATIONS_INTL) + remoto (f_WT=2) — nunca é
+    # busca global. E o filtro de idioma pós-busca (RegrasFiltro.
+    # idiomas_exigidos) só entra em jogo quando a vaga NÃO declara mercado
+    # nenhum no texto — quando o local já é um país aceito (ex: Colômbia),
+    # o PAÍS é o sinal, dispensa achar "spanish"/"portuguese" no título
+    # (mesma regra que já vale pro resto do filtro, ver job.py). Termo de
+    # cargo puro, escopado por país aceito, é seguro e fecha o vazamento:
+    # KEYWORDS_INTL aprova "Business Analyst"/"Data Analyst"/"Business
+    # Intelligence" como cargo forte, mas nenhum dos dois primeiros nunca
+    # era BUSCADO sozinho — só entravam por acidente, dentro de uma frase
+    # combinada.
+    "business analyst",
+    "data analyst",
+    "business intelligence",
     # Eixo Data Annotation / AI Evaluator
     "data annotation spanish speaker",
     "data annotation portuguese speaker",
