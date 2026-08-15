@@ -174,3 +174,44 @@ def test_combina_com(nome, titulo, local, modalidade, perfil, esperado):
         site="Teste", modalidade=modalidade,
     )
     assert job.combina_com(perfil.regras) == esperado
+
+
+# ---------------------------------------------------------------------------
+# Job.publicacao_antiga -- meses/anos = True, dias/semanas/vazio/absoluto
+# sem ano = False. Ver MEDIDO na property (job.py): vaga real da Sólides
+# ("há 7 meses") no jobs.db motivou o campo.
+# ---------------------------------------------------------------------------
+
+CASOS_PUBLICACAO_ANTIGA = [
+    # Caso real, capturado no jobs.db em produção (Solides, "ANALISTA DE
+    # DADOS / MIGRAÇÃO - PLENO") -- o caso que motivou o campo.
+    ("caso-real-solides-7-meses", "há 7 meses", True),
+    ("mes-singular", "há 1 mês", True),
+    ("anos-plural", "há 2 anos", True),
+    ("ano-singular", "há 1 ano", True),
+    # Dias/semanas continuam "fresca" -- só mês/ano é sinal inequívoco.
+    ("dias-nao-e-antiga", "há 3 dias", False),
+    ("semanas-nao-e-antiga", "há 2 semanas", False),
+    ("hoje-nao-e-antiga", "hoje", False),
+    ("ontem-nao-e-antiga", "ontem", False),
+    # Sem dado nenhum (fonte não expõe) -- não dá pra afirmar "antiga" por
+    # ausência de informação.
+    ("vazio-nao-e-antiga", "", False),
+    # Formato absoluto SEM ano -- não dá pra calcular idade sem saber o
+    # ano, então fica False de propósito (não arrisca adivinhar).
+    ("absoluto-sem-ano-nao-e-antiga", "Publicada em 11/08", False),
+]
+
+
+@pytest.mark.parametrize(
+    "nome,publicado_em,esperado",
+    CASOS_PUBLICACAO_ANTIGA,
+    ids=[c[0] for c in CASOS_PUBLICACAO_ANTIGA],
+)
+def test_publicacao_antiga(nome, publicado_em, esperado):
+    job = Job(
+        titulo="Analista de Dados", empresa="Teste", local="Recife, PE",
+        link=f"https://teste.invalido/{nome}", site="Teste", modalidade="Presencial",
+        publicado_em=publicado_em,
+    )
+    assert job.publicacao_antiga == esperado

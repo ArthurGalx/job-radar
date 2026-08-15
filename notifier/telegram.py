@@ -89,6 +89,19 @@ def _teclado_feedback(job_id: str) -> dict:
     }
 
 
+def _linha_aviso_antiga(job) -> str:
+    """Aviso quando Job.publicacao_antiga é True (publicado_em bate "há X
+    meses/anos") — a vaga ainda passou no filtro e está sendo notificada
+    (ver main.py: só muda pra digest em vez de imediata, nunca é
+    descartada — "duplicar/mostrar é aceitável, perder não" é o mesmo
+    princípio do digest), mas sem essa linha a mensagem parece uma vaga
+    fresca igual a qualquer outra, quando na real pode já estar
+    preenchida há tempos."""
+    if not job.publicacao_antiga:
+        return ""
+    return f"⚠️ <b>Postada {job.publicado_em}</b> — pode já estar preenchida.\n"
+
+
 def notificar_vaga(job) -> bool:
     # TODO (Fase 3): incluir aqui a % de compatibilidade com o currículo,
     # calculada por IA, quando essa etapa for implementada.
@@ -99,6 +112,7 @@ def notificar_vaga(job) -> bool:
     linha_modalidade = f"<b>Modalidade:</b> {job.modalidade}\n" if job.modalidade else ""
     texto = (
         f"🚨 <b>Nova vaga encontrada!</b>\n\n"
+        f"{_linha_aviso_antiga(job)}"
         f"<b>Relevância:</b> {_linha_relevancia(job.relevancia)}\n"
         f"<b>Motivo:</b> {job.motivo}\n"
         f"<b>Empresa:</b> {job.empresa}\n"
@@ -127,6 +141,7 @@ def notificar_vaga_exploratoria(job) -> bool:
     linha_modalidade = f"<b>Modalidade:</b> {job.modalidade}\n" if job.modalidade else ""
     texto = (
         f"🧭 <b>Vaga exploratória (Portugal/Espanha)</b>\n\n"
+        f"{_linha_aviso_antiga(job)}"
         f"<b>Relevância:</b> {_linha_relevancia(job.relevancia)}\n"
         f"<b>Motivo:</b> {job.motivo}\n"
         f"<b>Empresa:</b> {job.empresa}\n"

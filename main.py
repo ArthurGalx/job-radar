@@ -264,7 +264,17 @@ def ciclo_de_busca(perfil: Perfil):
                 # falhar" nesse caminho (a mensagem só sai no digest, depois),
                 # então salvar direto não arrisca perder a vaga do jeito que
                 # salvar ANTES de notificar arriscava no caminho imediato.
-                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO:
+                #
+                # MEDIDO: vaga com Job.publicacao_antiga (publicado_em "há X
+                # meses/anos" — ver job.py) nunca vai pra notificação
+                # imediata, mesmo com relevância alta — score mede "bate com
+                # o que você procura", não "é recente". Site com pouco
+                # volume pra um termo deixa vaga de meses atrás na página
+                # visível (confirmado ao vivo: Sólides ordena por data, mas
+                # sem volume novo suficiente a antiga não sai da 1ª página).
+                # Não é descartada (mesma vaga ainda pode estar aberta) — só
+                # sai do caminho "🚨 urgente" e vai pro digest em lote.
+                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO and not vaga.publicacao_antiga:
                     # Notifica ANTES de salvar. Se salvasse primeiro e o
                     # Telegram falhasse, a vaga ficava marcada como "vista"
                     # pra sempre — o próximo ciclo pulava ela em ja_vista()
@@ -280,8 +290,9 @@ def ciclo_de_busca(perfil: Perfil):
                     logger.info(f"[{perfil.nome}] Nova vaga: {vaga.titulo} - {vaga.empresa}")
                 else:
                     salvar_vaga(vaga, perfil_chave=perfil.chave, digest_pendente=True)
+                    motivo_digest = "vaga antiga" if vaga.publicacao_antiga else f"relevância {vaga.relevancia}/10"
                     logger.info(
-                        f"[{perfil.nome}] Nova vaga (digest, relevância {vaga.relevancia}/10): "
+                        f"[{perfil.nome}] Nova vaga (digest, {motivo_digest}): "
                         f"{vaga.titulo} - {vaga.empresa}"
                     )
 
@@ -292,7 +303,8 @@ def ciclo_de_busca(perfil: Perfil):
                 if ja_vista(vaga):
                     continue
 
-                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO:
+                # Mesma regra de vaga antiga do loop acima.
+                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO and not vaga.publicacao_antiga:
                     if not notificar_vaga_exploratoria(vaga):
                         logger.warning(
                             f"[{perfil.nome}] Falha ao notificar '{vaga.titulo}' (exploratória) - "
@@ -306,9 +318,10 @@ def ciclo_de_busca(perfil: Perfil):
                     )
                 else:
                     salvar_vaga(vaga, perfil_chave=perfil.chave, digest_pendente=True, exploratoria=True)
+                    motivo_digest = "vaga antiga" if vaga.publicacao_antiga else f"relevância {vaga.relevancia}/10"
                     logger.info(
-                        f"[{perfil.nome}] Nova vaga exploratória (digest, relevância "
-                        f"{vaga.relevancia}/10): {vaga.titulo} - {vaga.empresa}"
+                        f"[{perfil.nome}] Nova vaga exploratória (digest, {motivo_digest}): "
+                        f"{vaga.titulo} - {vaga.empresa}"
                     )
 
                 total_novas += 1

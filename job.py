@@ -860,6 +860,33 @@ class Job:
         return _detectar_senioridade(self.titulo)
 
     @property
+    def publicacao_antiga(self) -> bool:
+        """True quando publicado_em bate um formato relativo em MESES ou
+        ANOS (nunca dias/semanas) — ver _PADRAO_DATA_RELATIVA.
+
+        MEDIDO: vaga real capturada no jobs.db (Solides, "ANALISTA DE
+        DADOS / MIGRAÇÃO - PLENO") com publicado_em = "há 7 meses" —
+        confirmado ao vivo que o Sólides ordena por "Data de postagem"
+        (página 1 de "analista de dados" mostrando "há 1 dia" até "há 5
+        dias" em sequência), então um resultado de meses só sobe pra
+        página visível quando o TERMO de busca tem pouco volume — poucas
+        vagas novas concorrendo, a antiga nunca é empurrada pra baixo.
+        Mês inteiro sem a vaga sumir (nem o site atualizar a data) é sinal
+        forte de vaga estagnada — pode já estar preenchida, ou a empresa
+        esqueceu de tirar o anúncio do ar.
+
+        Escopo deliberadamente limitado ao formato RELATIVO: "" (fonte não
+        expõe data) e formato ABSOLUTO sem ano (ex: "Publicada em 11/08",
+        ver _PADRAO_DATA_ABSOLUTA) sempre voltam False — não dá pra
+        calcular idade de uma data absoluta sem saber o ano, então não
+        arrisca falso positivo/negativo adivinhando. dia(s)/semana(s)
+        também sempre False — só sinal INEQUÍVOCO de "há muito tempo"
+        conta, não estimativa por ausência de dado.
+        """
+        texto = _normalizar(self.publicado_em)
+        return "mes" in texto or "ano" in texto
+
+    @property
     def escopo_remoto(self) -> set[str]:
         """Mercado(s) geográfico(s) da vaga remota ({"Estados Unidos"},
         {"Brasil", "LATAM"}...), derivado do texto de `local` — ver
