@@ -77,6 +77,7 @@ Vaga de alta relevância chega na hora, com motivo da aprovação, nível e link
 - **73 testes automatizados em CI:** cada caso documenta um bug real já corrigido nesta base — não é cenário hipotético, é regressão registrada.
 
 ## 📁 Estrutura do repositório
+
 obradar/
 ├── README.md
 ├── requirements.txt
