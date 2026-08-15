@@ -98,6 +98,27 @@ def _garantir_colunas_digest(conn):
         conn.execute("ALTER TABLE vagas_vistas ADD COLUMN exploratoria INTEGER")
 
 
+def _garantir_coluna_situacao(conn):
+    """Migração leve: a tabela tinha 10 colunas e nenhuma dizia o que
+    aconteceu DEPOIS de notificada — candidatou, descartou, chamou pra
+    entrevista. O sistema encontra e notifica; o resto do funil (metade do
+    trabalho de procurar vaga) ficava sem registro nenhum, só na cabeça de
+    quem lê o Telegram.
+
+    Valor livre (não é ENUM/CHECK) de propósito — 'nova' é só o ponto de
+    partida, o vocabulário real (candidatei/descartei/entrevista/proposta...)
+    é decidido por quem usa, não travado no schema. Toda vaga nova entra
+    como 'nova' (ver salvar_vaga); linha existente antes desta coluna
+    também vira 'nova' no backfill abaixo — sem isso ficaria NULL pra
+    sempre, e um resumo tipo "o que ainda não teve retorno" (WHERE
+    situacao = 'nova') simplesmente não encontraria as vagas antigas."""
+    colunas = [linha[1] for linha in conn.execute("PRAGMA table_info(vagas_vistas)")]
+    if "situacao" not in colunas:
+        conn.execute("ALTER TABLE vagas_vistas ADD COLUMN situacao TEXT")
+
+    conn.execute("UPDATE vagas_vistas SET situacao = 'nova' WHERE situacao IS NULL")
+
+
 class BancoVazioSuspeito(RuntimeError):
     """jobs.db já existia em disco (tinha conteúdo) mas a tabela veio vazia
     depois de iniciar_db() — não é primeiro uso, é banco perdido/corrompido/
@@ -126,6 +147,7 @@ def iniciar_db():
         _garantir_coluna_publicado_em(conn)
         _garantir_coluna_modalidade(conn)
         _garantir_colunas_digest(conn)
+        _garantir_coluna_situacao(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_vagas_digest_pendente "
             "ON vagas_vistas (perfil, digest_pendente)"
@@ -206,14 +228,27 @@ def salvar_vaga(job, perfil_chave: str = "", digest_pendente: bool = False, expl
             """
             INSERT OR IGNORE INTO vagas_vistas
                 (id, titulo, empresa, local, link, site, chave_secundaria, publicado_em,
-                 modalidade, relevancia, perfil, digest_pendente, exploratoria)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 modalidade, relevancia, perfil, digest_pendente, exploratoria, situacao)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job.id, job.titulo, job.empresa, job.local, job.link, job.site,
                 job.chave_secundaria, job.publicado_em, job.modalidade,
-                job.relevancia, perfil_chave, int(digest_pendente), int(exploratoria),
+                job.relevancia, perfil_chave, int(digest_pendente), int(exploratoria), "nova",
             ),
+        )
+
+
+def definir_situacao(id_ou_link: str, situacao: str):
+    """Atualiza a situação de UMA vaga (nova/candidatei/descartei/
+    entrevista/o que quiser — valor livre, ver _garantir_coluna_situacao).
+    Aceita id (hash usado como chave primária) ou link exato — o link é o
+    que sobra de mais fácil de copiar da notificação do Telegram, então
+    aceitar os dois evita ter que ir atrás do id manualmente."""
+    with _conectar() as conn:
+        conn.execute(
+            "UPDATE vagas_vistas SET situacao = ? WHERE id = ? OR link = ?",
+            (situacao, id_ou_link, id_ou_link),
         )
 
 
