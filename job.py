@@ -801,6 +801,10 @@ class Job:
     # depois que a vaga passa combina_com() — 0 até lá (nunca usado sozinho
     # pra decidir nada, só pra ORDENAR/destacar na notificação).
     relevancia: int = 0
+    # Texto de motivo_aprovacao() (ver método), preenchido junto de
+    # relevancia — "" até lá. Só pra aparecer na notificação; não
+    # influencia filtro nem score.
+    motivo: str = ""
 
     def __post_init__(self):
         """Sobrepõe modalidade="Remoto" quando o TÍTULO contradiz (Híbrido/
@@ -1080,6 +1084,39 @@ class Job:
             pontos_cargo + pontos_ferramenta + pontos_senioridade
             + pontos_mercado + pontos_idioma
         )
+
+    def motivo_aprovacao(self, regras: RegrasFiltro) -> str:
+        """Qual sinal aprovou a vaga — só pra aparecer na notificação, não
+        influencia combina_com() nem pontuar_relevancia(). MEDIDO: a
+        mensagem nunca dizia qual regra bateu; via o resultado (vaga
+        chegou), nunca a causa (por que ela passou) — sem isso não dá pra
+        perceber, olhando as notificações, que uma keyword_ambiguo ou uma
+        ferramenta específica está trazendo lixo (teria que ir direto no
+        código/log pra descobrir).
+
+        Sinal de cargo (sempre um dos três — bate_keyword exige pelo menos
+        um pra aprovar), mesma prioridade de pontuar_relevancia:
+        - "Cargo forte": bateu keyword inequívoca de dados/BI.
+        - "Cargo ambíguo + qualificador": cargo genérico (ex: "Business
+          Analyst") só aprovado por causa do qualificador junto.
+        - "Ferramenta + cargo": aprovou por ferramenta no título (ex:
+          "Power BI"), não por palavra de cargo.
+
+        Mais " · idioma sem mercado" quando a vaga é remota, o texto não
+        declarou mercado nenhum, e só passou no gate de geografia porque o
+        idioma apareceu no título — o caminho mais frágil dos três (ver
+        MEDIDO no item 03: foi exatamente esse caminho que deixava passar
+        vaga sem relação nenhuma com o mercado antes da correção)."""
+        av = self._avaliar(regras)
+        if av.bate_forte:
+            motivo = "Cargo forte"
+        elif av.bate_ambiguo:
+            motivo = "Cargo ambíguo + qualificador"
+        else:
+            motivo = "Ferramenta + cargo"
+        if av.bate_remoto and not av.escopos and av.idioma_bateu_titulo:
+            motivo += " · idioma sem mercado"
+        return motivo
 
     def escopo_rejeitado_por_mercado(self, regras: RegrasFiltro) -> set[str] | None:
         """Só pra diagnóstico/log (ver utils/filtro.py) — refaz o mesmo

@@ -15,6 +15,7 @@ def filtrar_vagas(vagas: list[Job], regras: RegrasFiltro) -> tuple[list[Job], Co
     for v in vagas:
         if v.combina_com(regras):
             v.relevancia = v.pontuar_relevancia(regras)
+            v.motivo = v.motivo_aprovacao(regras)
             aprovadas.append(v)
         else:
             escopo = v.escopo_rejeitado_por_mercado(regras)

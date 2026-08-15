@@ -74,6 +74,7 @@ def notificar_vaga(job) -> bool:
     texto = (
         f"🚨 <b>Nova vaga encontrada!</b>\n\n"
         f"<b>Relevância:</b> {_linha_relevancia(job.relevancia)}\n"
+        f"<b>Motivo:</b> {job.motivo}\n"
         f"<b>Empresa:</b> {job.empresa}\n"
         f"<b>Cargo:</b> {job.titulo}\n"
         f"<b>Nível:</b> {job.senioridade}\n"
@@ -101,6 +102,7 @@ def notificar_vaga_exploratoria(job) -> bool:
     texto = (
         f"🧭 <b>Vaga exploratória (Portugal/Espanha)</b>\n\n"
         f"<b>Relevância:</b> {_linha_relevancia(job.relevancia)}\n"
+        f"<b>Motivo:</b> {job.motivo}\n"
         f"<b>Empresa:</b> {job.empresa}\n"
         f"<b>Cargo:</b> {job.titulo}\n"
         f"<b>Nível:</b> {job.senioridade}\n"
