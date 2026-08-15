@@ -730,14 +730,29 @@ _PESO_CARGO_AMBIGUO = 2
 _PESO_FERRAMENTA = 2
 _PESO_SENIORIDADE_ALVO = 2
 _PESO_SENIORIDADE_NEUTRA = 1  # título sem nível classificável — não penaliza por falta de informação
+# MEDIDO: classificar sem excluir (ver docstring de _detectar_senioridade)
+# continua certo, mas 0 pontos pra Sênior/Especialista/Liderança tratava
+# "acima do alvo" igual a "não deu pra saber" — as duas ficavam empatadas
+# no score. Medido contra as 780 vagas do jobs.db real: 25% classificam
+# Sênior/Especialista/Liderança, 65% não especificado, só 5,5%
+# Júnior/Pleno — sem separar os dois grupos de zero pontos, a maioria das
+# vagas realmente no alvo não se destacava de vaga acima do alvo nenhuma.
+# Peso negativo simétrico ao bônus (+2/-2): puxa pra baixo sem excluir —
+# a vaga continua passando por combina_com() e notificando (imediata ou no
+# digest), só cai mais no ranking.
+_PESO_SENIORIDADE_ACIMA_DO_ALVO = -2
 _PESO_MERCADO = 2
 _PESO_MERCADO_NAO_CONFIRMADO = 1  # remota sem mercado declarado no texto (aceita por padrão, sem confirmar)
 _PESO_IDIOMA = 1
 
 # Prioridade definida pelo usuário: Júnior e Pleno pontuam o teto de
-# senioridade. Estágio/Sênior/Especialista/Liderança pontuam 0 (fora do
-# alvo, não é filtro — a vaga ainda notifica, só com destaque menor).
+# senioridade (bônus). Sênior/Especialista/Liderança pontuam negativo
+# (acima do alvo, deságio). Estágio/Trainee fica neutro — nem é o alvo nem
+# é o problema de "vaga tolerável demais" que motivou o deságio (volume
+# desprezível: 0,3% da base). Nada disso é filtro — a vaga ainda notifica,
+# só muda a posição no ranking (imediata vs. digest, topo vs. fundo).
 _NIVEIS_SENIORIDADE_ALVO = {"Júnior", "Pleno"}
+_NIVEIS_SENIORIDADE_ACIMA_DO_ALVO = {"Sênior", "Especialista", "Liderança"}
 
 
 @dataclass
@@ -1008,18 +1023,23 @@ class Job:
         )
 
     def pontuar_relevancia(self, regras: RegrasFiltro) -> int:
-        """Score de 0 a 10 pra ORDENAR vagas que já passaram combina_com()
-        — não filtra nada, não muda quantas vagas notificam. Soma simples de
-        pontos por sinal, sem aprendizado de máquina (conjunto pequeno,
-        conhecido — não precisa de modelo).
+        """Score (1 a 10 na prática, ver MEDIDO abaixo) pra ORDENAR vagas
+        que já passaram combina_com() — não filtra nada, não muda quantas
+        vagas notificam. Soma simples de pontos por sinal, sem aprendizado
+        de máquina (conjunto pequeno, conhecido — não precisa de modelo).
 
         - Cargo no título: 3 se bateu keyword forte, 2 se bateu só o par
           ambíguo+qualificador, 0 se só bateu por ferramenta (sem cargo
           nenhum no título).
         - Ferramenta no título (Power BI, SQL, Python...): 2.
-        - Senioridade compatível: Júnior/Pleno (prioridade do usuário) = 2;
-          título sem nível classificável = 1 (não penaliza por falta de
-          informação); Estágio/Sênior/Especialista/Liderança = 0.
+        - Senioridade: Júnior/Pleno (prioridade do usuário) = +2; título
+          sem nível classificável = +1 (não penaliza por falta de
+          informação); Sênior/Especialista/Liderança = -2 (MEDIDO: 25% da
+          base é essa faixa, contra 5,5% Júnior/Pleno — 0 ponto pros dois
+          grupos deixava "acima do alvo" empatado com "sem informação"; a
+          vaga continua notificando, só cai no ranking); Estágio/Trainee
+          = 0 (nem alvo nem o problema que motivou o deságio, volume
+          desprezível).
         - Mercado: 2 quando não é remota (bate por cidade concreta — o
           mercado É a cidade buscada) ou quando é remota com escopo batendo
           um mercado aceito explicitamente; 1 quando é remota sem mercado
@@ -1042,10 +1062,12 @@ class Job:
         nivel = self.senioridade
         if nivel in _NIVEIS_SENIORIDADE_ALVO:
             pontos_senioridade = _PESO_SENIORIDADE_ALVO
+        elif nivel in _NIVEIS_SENIORIDADE_ACIMA_DO_ALVO:
+            pontos_senioridade = _PESO_SENIORIDADE_ACIMA_DO_ALVO
         elif nivel == "Não especificado" or nivel.startswith("Nível "):
             pontos_senioridade = _PESO_SENIORIDADE_NEUTRA
         else:
-            pontos_senioridade = 0
+            pontos_senioridade = 0  # Estágio/Trainee — nem alvo nem acima, neutro-baixo
 
         if not av.bate_remoto or av.mercado_confirmado:
             pontos_mercado = _PESO_MERCADO
