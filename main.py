@@ -6,16 +6,23 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 
-from config import INTERVALO_MINUTOS
+from config import DIGEST_HORA_UTC, INTERVALO_MINUTOS, LIMIAR_DIGEST_IMEDIATO
 from database.database import (
     BancoVazioSuspeito,
     definir_metadado,
     iniciar_db,
     ja_vista,
+    marcar_digest_enviado,
     obter_metadado,
+    obter_vagas_pendentes_digest,
     salvar_vaga,
 )
-from notifier.telegram import notificar_vaga, notificar_vaga_exploratoria, enviar_mensagem
+from notifier.telegram import (
+    enviar_digest,
+    enviar_mensagem,
+    notificar_vaga,
+    notificar_vaga_exploratoria,
+)
 from perfis import FREQUENCIA_ALTA, PERFIS, Perfil
 from utils.filtro import filtrar_vagas
 from logger import get_logger
@@ -129,6 +136,58 @@ def _enviar_heartbeat_diario(
     definir_metadado(chave, hoje)
 
 
+def _enviar_digest_diario(perfil: Perfil):
+    """No máximo 1 digest por dia (por perfil) — ver item 08. Junta tudo
+    que ficou digest_pendente=1 desde o último envio (pode ser de vários
+    ciclos de 3h) e manda ranqueado, melhor primeiro.
+
+    Disparo: no ciclo cujo horário UTC bate com DIGEST_HORA_UTC (0 =
+    meia-noite UTC = 21h em Brasília) — o cron já passa por essa hora
+    exata todo dia, não precisa de agendamento à parte. Mesma lógica de
+    "só uma vez por dia" do heartbeat (data salva em metadados), mas com
+    um reforço: se por qualquer motivo o ciclo exato de DIGEST_HORA_UTC
+    falhar/pular um dia inteiro, manda no primeiro ciclo depois de 24h
+    sem envio — não deixa a fila crescer indefinidamente esperando um
+    horário exato que pode não voltar a bater certo (ex: workflow atrasado
+    pelo GitHub Actions naquele dia).
+    """
+    chave = f"digest_ultimo_dia_{perfil.chave}"
+    hoje = date.today()
+    agora = datetime.now(timezone.utc)
+
+    ultimo_envio_str = obter_metadado(chave)
+    se_ja_enviou_hoje = ultimo_envio_str == hoje.isoformat()
+    if se_ja_enviou_hoje:
+        return
+
+    horario_certo = agora.hour == DIGEST_HORA_UTC
+    atrasado = ultimo_envio_str is not None and (
+        hoje - date.fromisoformat(ultimo_envio_str)
+    ).days >= 2
+    if not (horario_certo or atrasado):
+        return
+
+    vagas_pendentes = obter_vagas_pendentes_digest(perfil.chave)
+    if not vagas_pendentes:
+        # Marca mesmo sem vaga nenhuma — senão o "atrasado" acima dispara
+        # todo ciclo seguinte até aparecer alguma vaga pendente de novo.
+        definir_metadado(chave, hoje.isoformat())
+        return
+
+    if enviar_digest(vagas_pendentes, perfil.nome):
+        marcar_digest_enviado(perfil.chave)
+        definir_metadado(chave, hoje.isoformat())
+        logger.info(f"[{perfil.nome}] Digest diário enviado: {len(vagas_pendentes)} vaga(s).")
+    else:
+        # Não marca metadado nem limpa a fila — tenta de novo no próximo
+        # ciclo (ver enviar_digest/marcar_digest_enviado: preferir duplicar
+        # a perder vaga).
+        logger.warning(
+            f"[{perfil.nome}] Falha ao enviar digest diário ({len(vagas_pendentes)} vaga(s) "
+            "pendentes) - tenta de novo no próximo ciclo."
+        )
+
+
 def ciclo_de_busca(perfil: Perfil):
     total_novas = 0
     total_brutas = 0
@@ -196,40 +255,63 @@ def ciclo_de_busca(perfil: Perfil):
                 if ja_vista(vaga):
                     continue
 
-                # Notifica ANTES de salvar. Se salvasse primeiro e o Telegram
-                # falhasse, a vaga ficava marcada como "vista" pra sempre — o
-                # próximo ciclo pulava ela em ja_vista() e a vaga se perdia sem
-                # nunca ter sido notificada de verdade.
-                if not notificar_vaga(vaga):
-                    logger.warning(
-                        f"[{perfil.nome}] Falha ao notificar '{vaga.titulo}' - não marcada como "
-                        "vista, tenta de novo no próximo ciclo."
+                # Item 08: só notifica na hora quando a relevância passa do
+                # limiar (ver LIMIAR_DIGEST_IMEDIATO em config.py) — abaixo
+                # disso, vai pra fila do digest diário sem mensagem
+                # individual (ver _enviar_digest_diario). Fila é salvar com
+                # digest_pendente=True: não tem "notificação que pode
+                # falhar" nesse caminho (a mensagem só sai no digest, depois),
+                # então salvar direto não arrisca perder a vaga do jeito que
+                # salvar ANTES de notificar arriscava no caminho imediato.
+                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO:
+                    # Notifica ANTES de salvar. Se salvasse primeiro e o
+                    # Telegram falhasse, a vaga ficava marcada como "vista"
+                    # pra sempre — o próximo ciclo pulava ela em ja_vista()
+                    # e a vaga se perdia sem nunca ter sido notificada de
+                    # verdade.
+                    if not notificar_vaga(vaga):
+                        logger.warning(
+                            f"[{perfil.nome}] Falha ao notificar '{vaga.titulo}' - não marcada "
+                            "como vista, tenta de novo no próximo ciclo."
+                        )
+                        continue
+                    salvar_vaga(vaga, perfil_chave=perfil.chave)
+                    logger.info(f"[{perfil.nome}] Nova vaga: {vaga.titulo} - {vaga.empresa}")
+                else:
+                    salvar_vaga(vaga, perfil_chave=perfil.chave, digest_pendente=True)
+                    logger.info(
+                        f"[{perfil.nome}] Nova vaga (digest, relevância {vaga.relevancia}/10): "
+                        f"{vaga.titulo} - {vaga.empresa}"
                     )
-                    continue
 
-                salvar_vaga(vaga)
                 total_novas += 1
                 novas_da_fonte += 1
-                logger.info(f"[{perfil.nome}] Nova vaga: {vaga.titulo} - {vaga.empresa}")
 
             for vaga in vagas_secundarias:
                 if ja_vista(vaga):
                     continue
 
-                if not notificar_vaga_exploratoria(vaga):
-                    logger.warning(
-                        f"[{perfil.nome}] Falha ao notificar '{vaga.titulo}' (exploratória) - não "
-                        "marcada como vista, tenta de novo no próximo ciclo."
+                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO:
+                    if not notificar_vaga_exploratoria(vaga):
+                        logger.warning(
+                            f"[{perfil.nome}] Falha ao notificar '{vaga.titulo}' (exploratória) - "
+                            "não marcada como vista, tenta de novo no próximo ciclo."
+                        )
+                        continue
+                    salvar_vaga(vaga, perfil_chave=perfil.chave)
+                    logger.info(
+                        f"[{perfil.nome}] Nova vaga exploratória ({perfil.eixo_secundario_rotulo}): "
+                        f"{vaga.titulo} - {vaga.empresa}"
                     )
-                    continue
+                else:
+                    salvar_vaga(vaga, perfil_chave=perfil.chave, digest_pendente=True, exploratoria=True)
+                    logger.info(
+                        f"[{perfil.nome}] Nova vaga exploratória (digest, relevância "
+                        f"{vaga.relevancia}/10): {vaga.titulo} - {vaga.empresa}"
+                    )
 
-                salvar_vaga(vaga)
                 total_novas += 1
                 novas_da_fonte += 1
-                logger.info(
-                    f"[{perfil.nome}] Nova vaga exploratória ({perfil.eixo_secundario_rotulo}): "
-                    f"{vaga.titulo} - {vaga.empresa}"
-                )
 
             # Funil por fonte: sem isso só dava pra ver bruta (por fonte) e
             # nova (só o total do ciclo) — o meio (quanto o filtro de
@@ -271,6 +353,7 @@ def ciclo_de_busca(perfil: Perfil):
         )
 
     _enviar_heartbeat_diario(perfil, total_novas, scrapers_com_problema, len(scrapers))
+    _enviar_digest_diario(perfil)
 
 
 def _rodar_um_ciclo_de_cada(perfis: list[Perfil]):

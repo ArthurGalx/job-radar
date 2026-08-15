@@ -112,3 +112,55 @@ def notificar_vaga_exploratoria(job) -> bool:
         f"<b>Link:</b>\n{job.link}"
     )
     return enviar_mensagem(texto)
+
+
+# Margem sob o limite real do Telegram (4096 caracteres por mensagem) —
+# sobra pra cabeçalho/rodapé e pra emoji/acentuação que ocupam mais de 1
+# "caractere" em contagem de bytes.
+_LIMITE_CHARS_DIGEST = 3500
+
+
+def montar_digest(vagas: list[tuple], rotulo_perfil: str) -> list[str]:
+    """Monta o texto do digest diário (item 08) a partir do que
+    obter_vagas_pendentes_digest() devolve — já vem ordenado da mais
+    relevante pra menos. Devolve uma LISTA de mensagens, não uma só: com
+    ~93% do volume indo pro digest (ver LIMIAR_DIGEST_IMEDIATO em
+    config.py), um dia cheio passa fácil dos 4096 caracteres do Telegram
+    — quebra em partes numeradas em vez de estourar/truncar."""
+    linhas = [
+        f'{"🧭" if exploratoria else "•"} {_linha_relevancia(relevancia or 0)} '
+        f'<a href="{link}">{titulo}</a> — {empresa}'
+        for titulo, empresa, link, relevancia, exploratoria in vagas
+    ]
+
+    partes: list[list[str]] = []
+    parte_atual: list[str] = []
+    tamanho_atual = 0
+    for linha in linhas:
+        if parte_atual and tamanho_atual + len(linha) + 1 > _LIMITE_CHARS_DIGEST:
+            partes.append(parte_atual)
+            parte_atual, tamanho_atual = [], 0
+        parte_atual.append(linha)
+        tamanho_atual += len(linha) + 1
+    if parte_atual:
+        partes.append(parte_atual)
+
+    total_partes = len(partes)
+    mensagens = []
+    for i, parte in enumerate(partes, start=1):
+        cabecalho = f"📋 <b>Digest diário — {rotulo_perfil}</b> ({len(vagas)} vaga(s))"
+        if total_partes > 1:
+            cabecalho += f" — parte {i}/{total_partes}"
+        mensagens.append(cabecalho + "\n\n" + "\n".join(parte))
+    return mensagens
+
+
+def enviar_digest(vagas: list[tuple], rotulo_perfil: str) -> bool:
+    """Manda todas as partes do digest em sequência. Só True se TODAS
+    confirmarem — ver marcar_digest_enviado em database.py: o chamador só
+    limpa a fila com esse retorno True, então falha parcial mantém tudo
+    pendente (inclusive parte já enviada com sucesso) pro próximo envio.
+    Preferir duplicar uma parte a perder vaga que nunca chegou a notificar."""
+    if not vagas:
+        return True
+    return all(enviar_mensagem(mensagem) for mensagem in montar_digest(vagas, rotulo_perfil))

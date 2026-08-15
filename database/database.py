@@ -73,6 +73,31 @@ def _garantir_coluna_modalidade(conn):
         conn.execute("ALTER TABLE vagas_vistas ADD COLUMN modalidade TEXT")
 
 
+def _garantir_colunas_digest(conn):
+    """Migração leve pro digest ranqueado (ver main.py/_enviar_digest_diario
+    e notifier/telegram.py/montar_digest): vaga com relevancia abaixo do
+    limiar não notifica na hora, fica marcada digest_pendente=1 até entrar
+    num digest enviado com sucesso — linha antiga (antes desta coluna
+    existir) fica com digest_pendente NULL, que o WHERE digest_pendente = 1
+    do digest simplesmente ignora (comportamento correto: vaga antiga já
+    foi tratada de um jeito ou de outro antes desse recurso existir).
+
+    `perfil`: sem isso não dá pra saber de qual perfil (brasil/
+    internacional) veio cada linha pendente — o digest é por perfil, igual
+    heartbeat e alerta de saúde já são. `exploratoria`: só pra render (ícone
+    diferente na lista), não afeta a lógica de fila.
+    """
+    colunas = [linha[1] for linha in conn.execute("PRAGMA table_info(vagas_vistas)")]
+    if "relevancia" not in colunas:
+        conn.execute("ALTER TABLE vagas_vistas ADD COLUMN relevancia INTEGER")
+    if "perfil" not in colunas:
+        conn.execute("ALTER TABLE vagas_vistas ADD COLUMN perfil TEXT")
+    if "digest_pendente" not in colunas:
+        conn.execute("ALTER TABLE vagas_vistas ADD COLUMN digest_pendente INTEGER")
+    if "exploratoria" not in colunas:
+        conn.execute("ALTER TABLE vagas_vistas ADD COLUMN exploratoria INTEGER")
+
+
 class BancoVazioSuspeito(RuntimeError):
     """jobs.db já existia em disco (tinha conteúdo) mas a tabela veio vazia
     depois de iniciar_db() — não é primeiro uso, é banco perdido/corrompido/
@@ -100,6 +125,11 @@ def iniciar_db():
         _garantir_coluna_chave_secundaria(conn)
         _garantir_coluna_publicado_em(conn)
         _garantir_coluna_modalidade(conn)
+        _garantir_colunas_digest(conn)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vagas_digest_pendente "
+            "ON vagas_vistas (perfil, digest_pendente)"
+        )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_vagas_chave_secundaria "
             "ON vagas_vistas (chave_secundaria)"
@@ -163,16 +193,58 @@ def definir_metadado(chave: str, valor: str):
         )
 
 
-def salvar_vaga(job):
+def salvar_vaga(job, perfil_chave: str = "", digest_pendente: bool = False, exploratoria: bool = False):
+    """`digest_pendente=True` marca a vaga como ainda não notificada —
+    entrou na fila do digest diário (ver _enviar_digest_diario em main.py)
+    em vez de mandar mensagem individual na hora, porque a relevância ficou
+    abaixo do limiar. `perfil_chave` é o que permite o digest buscar só as
+    pendentes DESSE perfil (ver obter_vagas_pendentes_digest) — sem isso,
+    rodar brasil+internacional na mesma execução misturaria a fila dos
+    dois."""
     with _conectar() as conn:
         conn.execute(
             """
             INSERT OR IGNORE INTO vagas_vistas
-                (id, titulo, empresa, local, link, site, chave_secundaria, publicado_em, modalidade)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, titulo, empresa, local, link, site, chave_secundaria, publicado_em,
+                 modalidade, relevancia, perfil, digest_pendente, exploratoria)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job.id, job.titulo, job.empresa, job.local, job.link, job.site,
                 job.chave_secundaria, job.publicado_em, job.modalidade,
+                job.relevancia, perfil_chave, int(digest_pendente), int(exploratoria),
             ),
+        )
+
+
+def obter_vagas_pendentes_digest(perfil_chave: str) -> list[tuple]:
+    """Vagas salvas com digest_pendente=1 pra esse perfil, da mais
+    relevante pra menos — ver _enviar_digest_diario em main.py. Pode
+    acumular de mais de um ciclo (a cada 3h) até bater o horário do envio,
+    e também sobrevive se o envio de um dia falhar (Telegram fora do ar):
+    fica pendente e entra no digest seguinte, nunca é descartada."""
+    with _conectar() as conn:
+        cursor = conn.execute(
+            """
+            SELECT titulo, empresa, link, relevancia, exploratoria
+            FROM vagas_vistas
+            WHERE perfil = ? AND digest_pendente = 1
+            ORDER BY relevancia DESC, encontrada_em ASC
+            """,
+            (perfil_chave,),
+        )
+        return cursor.fetchall()
+
+
+def marcar_digest_enviado(perfil_chave: str):
+    """Só chamar depois que TODAS as partes do digest confirmarem envio
+    (ver enviar_digest em notifier/telegram.py) — se qualquer parte falhar,
+    não limpa nada, pra não perder vaga: fica tudo pendente e tenta nas
+    partes de novo no próximo envio, mesmo que isso duplique alguma que já
+    tinha saído com sucesso numa parte anterior. Duplicar é aceitável;
+    perder não."""
+    with _conectar() as conn:
+        conn.execute(
+            "UPDATE vagas_vistas SET digest_pendente = 0 WHERE perfil = ? AND digest_pendente = 1",
+            (perfil_chave,),
         )

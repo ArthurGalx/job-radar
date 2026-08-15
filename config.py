@@ -250,6 +250,26 @@ MERCADOS_REMOTO_ACEITOS = ["Brasil", "LATAM", "Argentina", "Chile", "México", "
 
 INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 180))
 
+# Digest ranqueado (item 08): vaga com Job.pontuar_relevancia() >= este
+# limiar notifica na hora (como sempre foi); abaixo disso, fica na fila do
+# digest diário — ver _enviar_digest_diario em main.py.
+#
+# MEDIDO: rodei o score contra as ~305 vagas do jobs.db real que ainda
+# batem as regras atuais. Distribuição: score 4 (2%), 5 (24%), 6 (67%),
+# 7 (5%), 8 (2%) — nada em 9-10 na amostra (exige acertar praticamente
+# todo sinal ao mesmo tempo: cargo forte + ferramenta + senioridade alvo +
+# mercado confirmado). Limiar 7 deixa ~7% imediata e ~93% no digest — bate
+# com o pedido ("vaga de score alto na hora, resto agrupado"); 6 deixava
+# 74% imediata (pouca redução de ruído); 8 deixava só 2% (digest com
+# praticamente tudo, quase nenhuma vaga "excelente" se destacando na hora).
+LIMIAR_DIGEST_IMEDIATO = 7
+
+# Hora UTC em que o digest diário dispara (uma vez por perfil, por dia —
+# ver _enviar_digest_diario). 0 = meia-noite UTC = 21h em Brasília (UTC-3).
+# O cron do workflow (0 */3 * * *) já passa por essa hora exata todo dia,
+# então não precisa de agendamento à parte.
+DIGEST_HORA_UTC = 0
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
