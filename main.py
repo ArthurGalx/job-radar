@@ -22,6 +22,7 @@ from notifier.telegram import (
     enviar_mensagem,
     notificar_vaga,
     notificar_vaga_exploratoria,
+    processar_feedback_pendente,
 )
 from perfis import FREQUENCIA_ALTA, PERFIS, Perfil
 from utils.filtro import filtrar_vagas
@@ -357,6 +358,12 @@ def ciclo_de_busca(perfil: Perfil):
 
 
 def _rodar_um_ciclo_de_cada(perfis: list[Perfil]):
+    # Uma vez por execução, não por perfil: o offset do getUpdates (ver
+    # processar_feedback_pendente) é global — feedback de vaga não tem
+    # perfil, e rodar duas vezes na mesma execução só gastaria uma chamada
+    # de API à toa (a segunda sempre veria "nada novo desde a última vez").
+    processar_feedback_pendente()
+
     for perfil in perfis:
         print(f"\n{'=' * 50}")
         print(f"PERFIL: {perfil.nome.upper()}")

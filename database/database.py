@@ -119,6 +119,25 @@ def _garantir_coluna_situacao(conn):
     conn.execute("UPDATE vagas_vistas SET situacao = 'nova' WHERE situacao IS NULL")
 
 
+def _garantir_coluna_feedback(conn):
+    """Migração leve: reação 👍/👎 no Telegram (botão inline, ver
+    notifier/telegram.py) grava aqui se a vaga notificada era boa ou era
+    ruído — sinal que hoje não existe em lugar nenhum. Sem isso, ajustar
+    KEYWORDS_CARGO_AMBIGUO/FERRAMENTAS_TITULO/TERMOS_BUSCA continua sendo
+    intuição de quem lê o log, do mesmo jeito que os bugs de precisão desta
+    base sempre nasceram.
+
+    Diferente de situacao (que sempre tem valor, default 'nova'), feedback
+    fica NULL até alguém de fato reagir — NULL aqui significa "sem reação
+    ainda", um estado real e distinto de "positivo"/"negativo", não um
+    buraco de migração pra preencher. Por isso não tem backfill: as 780
+    linhas antigas continuam NULL até o usuário reagir (ou não) de agora
+    em diante — não dá pra inferir reação passada que nunca aconteceu."""
+    colunas = [linha[1] for linha in conn.execute("PRAGMA table_info(vagas_vistas)")]
+    if "feedback" not in colunas:
+        conn.execute("ALTER TABLE vagas_vistas ADD COLUMN feedback TEXT")
+
+
 class BancoVazioSuspeito(RuntimeError):
     """jobs.db já existia em disco (tinha conteúdo) mas a tabela veio vazia
     depois de iniciar_db() — não é primeiro uso, é banco perdido/corrompido/
@@ -148,6 +167,7 @@ def iniciar_db():
         _garantir_coluna_modalidade(conn)
         _garantir_colunas_digest(conn)
         _garantir_coluna_situacao(conn)
+        _garantir_coluna_feedback(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_vagas_digest_pendente "
             "ON vagas_vistas (perfil, digest_pendente)"
@@ -249,6 +269,19 @@ def definir_situacao(id_ou_link: str, situacao: str):
         conn.execute(
             "UPDATE vagas_vistas SET situacao = ? WHERE id = ? OR link = ?",
             (situacao, id_ou_link, id_ou_link),
+        )
+
+
+def definir_feedback(job_id: str, feedback: str):
+    """Grava a reação 👍/👎 do botão inline (ver processar_feedback_pendente
+    em notifier/telegram.py) — 'positivo'/'negativo'. Só por id (não por
+    link, diferente de definir_situacao): o callback_data do botão sempre
+    carrega o id, nunca o link inteiro (custaria mais dos 64 bytes que o
+    Telegram permite em callback_data)."""
+    with _conectar() as conn:
+        conn.execute(
+            "UPDATE vagas_vistas SET feedback = ? WHERE id = ?",
+            (feedback, job_id),
         )
 
 

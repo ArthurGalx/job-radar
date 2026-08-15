@@ -1,13 +1,16 @@
 
+import json
+
 import requests
 
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from database.database import definir_feedback, definir_metadado, obter_metadado
 from logger import get_logger
 
 logger = get_logger()
 
 
-def enviar_mensagem(texto: str) -> bool:
+def enviar_mensagem(texto: str, reply_markup: dict | None = None) -> bool:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         logger.warning("Telegram não configurado (token/chat_id ausentes no .env). Pulando envio.")
         return False
@@ -20,6 +23,11 @@ def enviar_mensagem(texto: str) -> bool:
         "parse_mode": "HTML",
         "disable_web_page_preview": False,
     }
+    # Telegram exige reply_markup como string JSON quando o corpo do POST é
+    # form-encoded (o `data=` abaixo) — passar o dict cru falha silenciosamente
+    # (o teclado não aparece, sem erro nenhum reportado pela API).
+    if reply_markup is not None:
+        payload["reply_markup"] = json.dumps(reply_markup)
 
     try:
         resposta = requests.post(url, data=payload, timeout=10)
@@ -63,6 +71,24 @@ def _linha_relevancia(pontos: int) -> str:
     return "⭐" * cheias + "☆" * (5 - cheias) + f" ({pontos}/10)"
 
 
+def _teclado_feedback(job_id: str) -> dict:
+    """Teclado inline 👍/👎 anexado à notificação — callback_data carrega a
+    direção (1/0) e o id do Job (hash md5, 32 chars), separados por "|".
+    Formato curto de propósito: o limite real do Telegram pra callback_data
+    é 64 bytes, e "fb|1|" + hash já usa 37 — sobra margem, mas não dá pra
+    ser generoso (ex: guardar o link inteiro não caberia).
+
+    Sem ISSO gravado no botão, o callback_query que chega quando alguém
+    aperta não tem como saber DE QUAL vaga — a mensagem em si não é
+    suficiente (ver processar_feedback_pendente)."""
+    return {
+        "inline_keyboard": [[
+            {"text": "👍", "callback_data": f"fb|1|{job_id}"},
+            {"text": "👎", "callback_data": f"fb|0|{job_id}"},
+        ]]
+    }
+
+
 def notificar_vaga(job) -> bool:
     # TODO (Fase 3): incluir aqui a % de compatibilidade com o currículo,
     # calculada por IA, quando essa etapa for implementada.
@@ -85,7 +111,7 @@ def notificar_vaga(job) -> bool:
         f"Encontrada agora\n\n"
         f"<b>Link:</b>\n{job.link}"
     )
-    return enviar_mensagem(texto)
+    return enviar_mensagem(texto, reply_markup=_teclado_feedback(job.id))
 
 
 def notificar_vaga_exploratoria(job) -> bool:
@@ -113,7 +139,7 @@ def notificar_vaga_exploratoria(job) -> bool:
         f"como remota, pode ser presencial ou híbrida. Confirma no link.\n\n"
         f"<b>Link:</b>\n{job.link}"
     )
-    return enviar_mensagem(texto)
+    return enviar_mensagem(texto, reply_markup=_teclado_feedback(job.id))
 
 
 # Margem sob o limite real do Telegram (4096 caracteres por mensagem) —
@@ -166,3 +192,127 @@ def enviar_digest(vagas: list[tuple], rotulo_perfil: str) -> bool:
     if not vagas:
         return True
     return all(enviar_mensagem(mensagem) for mensagem in montar_digest(vagas, rotulo_perfil))
+
+
+def _chamar_api_telegram(metodo: str, payload: dict) -> dict | None:
+    """POST genérico pra método da Bot API além de sendMessage — usado só
+    pelo fluxo de feedback (getUpdates/answerCallbackQuery/
+    editMessageReplyMarkup). Mesmo tratamento de erro de enviar_mensagem
+    (nunca loga token nem URL — ver comentário lá), sem duplicar o bloco
+    try/except em cada método novo."""
+    if not TELEGRAM_BOT_TOKEN:
+        return None
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{metodo}"
+    try:
+        resposta = requests.post(url, data=payload, timeout=10)
+        resposta.raise_for_status()
+        return resposta.json()
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response is not None else None
+        motivo = e.response.reason if e.response is not None else "sem detalhe"
+        logger.error(f"Erro ao chamar Telegram {metodo}: HTTP {status} ({motivo})")
+        return None
+    except requests.RequestException as e:
+        logger.error(
+            f"Erro ao chamar Telegram {metodo}: {type(e).__name__} "
+            "(falha de conexão, sem resposta do servidor)"
+        )
+        return None
+
+
+def _parsear_callback_data(data: str) -> tuple[str, str] | None:
+    """Extrai (job_id, feedback) de um callback_data no formato
+    'fb|1|<id>' (positivo) / 'fb|0|<id>' (negativo) — None quando não
+    reconhece o formato (ex: o botão de confirmação 'fb|ok|-' que substitui
+    o teclado original depois de registrado, ou qualquer callback_data que
+    não seja deste projeto). Função pura, separada da chamada de rede de
+    propósito — é a parte que vale a pena testar sem mockar HTTP."""
+    partes = (data or "").split("|")
+    if len(partes) != 3 or partes[0] != "fb" or partes[1] not in ("1", "0"):
+        return None
+    return partes[2], ("positivo" if partes[1] == "1" else "negativo")
+
+
+_OFFSET_CHAVE = "telegram_update_offset"
+
+
+def processar_feedback_pendente():
+    """Consome os cliques em 👍/👎 desde o último ciclo. Sem webhook, sem
+    servidor próprio — o cron de 3 em 3 horas do projeto (ver
+    .github/workflows/jobradar.yml) já FAZ o papel de polling: cada
+    execução pergunta ao Telegram "o que mudou desde a última vez que eu
+    perguntei" via getUpdates, processa, e segue pro ciclo de busca normal.
+    Mesma filosofia de custo zero de infraestrutura do resto do projeto.
+
+    offset fica salvo em metadados (mesma tabela chave/valor do heartbeat/
+    digest/rodízio de termos): getUpdates com offset=N+1 confirma pro
+    próprio Telegram que tudo até N já foi visto — sem isso, o mesmo
+    clique seria reprocessado em todo ciclo daqui pra frente.
+    """
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+
+    payload = {
+        "timeout": 0,  # short poll -- só pergunta "tem algo pendente agora", não fica esperando
+        "limit": 100,
+        "allowed_updates": json.dumps(["callback_query"]),
+    }
+    offset_salvo = obter_metadado(_OFFSET_CHAVE)
+    if offset_salvo:
+        payload["offset"] = str(int(offset_salvo) + 1)
+
+    resultado = _chamar_api_telegram("getUpdates", payload)
+    if resultado is None or not resultado.get("ok"):
+        return
+
+    updates = resultado.get("result", [])
+    if not updates:
+        return
+
+    maior_update_id = None
+    for update in updates:
+        update_id = update.get("update_id")
+        if update_id is not None:
+            maior_update_id = update_id if maior_update_id is None else max(maior_update_id, update_id)
+
+        callback = update.get("callback_query")
+        if not callback:
+            continue
+
+        # Só processa callback do chat configurado -- mesmo escopo de "bot
+        # de uso pessoal, um chat só" que o resto do projeto assume.
+        mensagem = callback.get("message") or {}
+        chat_id = str((mensagem.get("chat") or {}).get("id", ""))
+        if not chat_id or chat_id != str(TELEGRAM_CHAT_ID):
+            continue
+
+        parseado = _parsear_callback_data(callback.get("data", ""))
+        if parseado is not None:
+            job_id, feedback = parseado
+            definir_feedback(job_id, feedback)
+            emoji = "👍" if feedback == "positivo" else "👎"
+            texto_toast = f"Registrado: {emoji}"
+            # Substitui o teclado por um botão único, não-funcional de
+            # propósito (callback_data "fb|ok|-" nunca bate no parser acima)
+            # -- dá confirmação visual e evita clique duplicado mudando o
+            # valor sem querer.
+            novo_teclado = {"inline_keyboard": [[{"text": f"✅ Registrado: {emoji}", "callback_data": "fb|ok|-"}]]}
+        else:
+            texto_toast = "Já registrado."
+            novo_teclado = None
+
+        _chamar_api_telegram("answerCallbackQuery", {
+            "callback_query_id": callback["id"],
+            "text": texto_toast,
+        })
+
+        if novo_teclado is not None and mensagem.get("message_id"):
+            _chamar_api_telegram("editMessageReplyMarkup", {
+                "chat_id": chat_id,
+                "message_id": mensagem["message_id"],
+                "reply_markup": json.dumps(novo_teclado),
+            })
+
+    if maior_update_id is not None:
+        definir_metadado(_OFFSET_CHAVE, str(maior_update_id))
