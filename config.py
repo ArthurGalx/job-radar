@@ -351,4 +351,19 @@ DIGEST_HORA_UTC = 0
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# Export pra Google Sheets (ver exporters/sheets.py e o código do Apps
+# Script em docs/planilha_apps_script.gs). Vazio = export desligado, e o
+# resto do pipeline roda igual — é um canal EXTRA, nunca um pré-requisito:
+# planilha fora do ar não pode impedir notificação nem fazer vaga ser
+# perdida.
+#
+# A URL do web app é credencial na prática (quem tem a URL escreve na
+# planilha), por isso vem de secret/.env como o token do Telegram — nunca
+# hardcoded — e nunca é logada (mesmo cuidado do enviar_mensagem, ver
+# MEDIDO em notifier/telegram.py sobre vazamento de token no log).
+# SHEETS_TOKEN é um segundo segredo, conferido DENTRO do Apps Script: sem
+# ele, qualquer um que descobrisse a URL poderia injetar linha na planilha.
+SHEETS_WEBHOOK_URL = os.getenv("SHEETS_WEBHOOK_URL", "")
+SHEETS_TOKEN = os.getenv("SHEETS_TOKEN", "")
+
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "jobs.db")

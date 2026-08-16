@@ -24,6 +24,7 @@ from notifier.telegram import (
     notificar_vaga_exploratoria,
     processar_feedback_pendente,
 )
+from exporters.sheets import exportar_vaga
 from perfis import FREQUENCIA_ALTA, PERFIS, Perfil
 from utils.filtro import filtrar_vagas
 from logger import get_logger
@@ -274,7 +275,8 @@ def ciclo_de_busca(perfil: Perfil):
                 # sem volume novo suficiente a antiga não sai da 1ª página).
                 # Não é descartada (mesma vaga ainda pode estar aberta) — só
                 # sai do caminho "🚨 urgente" e vai pro digest em lote.
-                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO and not vaga.publicacao_antiga:
+                imediata = vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO and not vaga.publicacao_antiga
+                if imediata:
                     # Notifica ANTES de salvar. Se salvasse primeiro e o
                     # Telegram falhasse, a vaga ficava marcada como "vista"
                     # pra sempre — o próximo ciclo pulava ela em ja_vista()
@@ -296,6 +298,18 @@ def ciclo_de_busca(perfil: Perfil):
                         f"{vaga.titulo} - {vaga.empresa}"
                     )
 
+                # DEPOIS de salvar, nunca antes: a planilha é canal extra
+                # (ver exporters/sheets.py) e não pode virar pré-requisito
+                # de nada. Falha aqui só loga — a vaga já está notificada e
+                # marcada como vista, e repetir o ciclo por causa da
+                # planilha é o que faria a vaga ser notificada duas vezes.
+                exportar_vaga(
+                    vaga,
+                    perfil_nome=perfil.nome,
+                    canal="imediata" if imediata else "digest",
+                    motivo=vaga.motivo_aprovacao(perfil.regras),
+                )
+
                 total_novas += 1
                 novas_da_fonte += 1
 
@@ -304,7 +318,8 @@ def ciclo_de_busca(perfil: Perfil):
                     continue
 
                 # Mesma regra de vaga antiga do loop acima.
-                if vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO and not vaga.publicacao_antiga:
+                imediata = vaga.relevancia >= LIMIAR_DIGEST_IMEDIATO and not vaga.publicacao_antiga
+                if imediata:
                     if not notificar_vaga_exploratoria(vaga):
                         logger.warning(
                             f"[{perfil.nome}] Falha ao notificar '{vaga.titulo}' (exploratória) - "
@@ -323,6 +338,17 @@ def ciclo_de_busca(perfil: Perfil):
                         f"[{perfil.nome}] Nova vaga exploratória (digest, {motivo_digest}): "
                         f"{vaga.titulo} - {vaga.empresa}"
                     )
+
+                # Regras do eixo secundário, não as primárias: é por elas
+                # que a vaga exploratória passou (ver regras_eixo_secundario
+                # em perfis.py), então é o motivo delas que explica a linha.
+                exportar_vaga(
+                    vaga,
+                    perfil_nome=perfil.nome,
+                    canal="imediata" if imediata else "digest",
+                    motivo=vaga.motivo_aprovacao(perfil.regras_eixo_secundario),
+                    exploratoria=True,
+                )
 
                 total_novas += 1
                 novas_da_fonte += 1

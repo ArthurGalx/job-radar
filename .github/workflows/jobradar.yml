@@ -43,6 +43,10 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Export pra planilha (ver exporters/sheets.py). Secret ausente =
+          # export desligado, ciclo roda igual — não é pré-requisito.
+          SHEETS_WEBHOOK_URL: ${{ secrets.SHEETS_WEBHOOK_URL }}
+          SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
         # Antes disso só o perfil Brasil rodava aqui — main_intl.py existia
         # no repositório mas nunca foi chamado pelo workflow, então o
         # pipeline internacional nunca rodou de verdade em produção. Agora é
