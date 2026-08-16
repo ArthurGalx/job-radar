@@ -3,7 +3,22 @@ name: JobRadar
 on:
   schedule:
     - cron: "0 */3 * * *"
-  workflow_dispatch: {}
+  # Disparo manual aceita escolher o perfil. O cron continua rodando os
+  # dois, como sempre — isso existe pro caso de querer medir volume ou
+  # testar uma mudança de config sem soltar o pipeline inteiro de uma vez
+  # (o que foi exatamente a necessidade na virada de escopo pra produto:
+  # todo o histórico do jobs.db era de Dados/BI, então a primeira leva do
+  # escopo novo chega inteira como "vaga nova").
+  workflow_dispatch:
+    inputs:
+      perfis:
+        description: "Perfis a rodar neste disparo"
+        type: choice
+        default: "brasil internacional"
+        options:
+          - "brasil internacional"
+          - "brasil"
+          - "internacional"
 
 concurrency:
   group: jobradar-cycle
@@ -47,12 +62,20 @@ jobs:
           # export desligado, ciclo roda igual — não é pré-requisito.
           SHEETS_WEBHOOK_URL: ${{ secrets.SHEETS_WEBHOOK_URL }}
           SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+          # Via env, não interpolado direto no `run` abaixo: expressão do
+          # GitHub dentro do script vira injeção de comando se o valor não
+          # for confiável. `type: choice` já limita as opções, mas o padrão
+          # seguro não custa nada. Vazio (agendamento por cron) cai no
+          # default de rodar os dois perfis.
+          PERFIS: ${{ github.event.inputs.perfis || 'brasil internacional' }}
         # Antes disso só o perfil Brasil rodava aqui — main_intl.py existia
         # no repositório mas nunca foi chamado pelo workflow, então o
         # pipeline internacional nunca rodou de verdade em produção. Agora é
         # um projeto só com dois perfis selecionáveis (ver perfis.py); os
         # dois rodam na mesma execução/commit, um após o outro.
-        run: python main.py --perfil brasil internacional --once
+        # $PERFIS sem aspas de propósito: precisa quebrar em dois
+        # argumentos quando são dois perfis (--perfil brasil internacional).
+        run: python main.py --perfil $PERFIS --once
 
       - name: Salvar vagas já vistas (evita notificação duplicada)
         run: |
