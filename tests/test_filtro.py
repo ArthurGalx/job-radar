@@ -137,29 +137,45 @@ CASOS_COMBINA_COM = [
     # Anti-regressão crítica (mesmo caso do teste de escopo, agora
     # end-to-end): vaga americana sem sigla de estado tem que ser barrada
     # no perfil internacional (que só aceita LATAM/Ibéria).
-    ("seattle-barrada-perfil-intl", "Senior Data Analyst", "Greater Seattle Area", "Remoto", PERFIL_INTL, False),
+    ("seattle-barrada-perfil-intl", "Senior Product Manager", "Greater Seattle Area", "Remoto", PERFIL_INTL, False),
     # Remota sem mercado declarado: só passa se o TÍTULO afirmar idioma/
     # região (spanish/portuguese/latam/...) — regra adicionada depois que
-    # "Senior Data Analyst" remoto sem relação nenhuma com o mercado
-    # passava só por não ter nada que a rejeitasse.
-    ("spanish-speaking-sem-mercado-passa", "Spanish Speaking Data Analyst", "Remote", "Remoto", PERFIL_INTL, True),
-    ("data-analyst-latam-passa", "Data Analyst LATAM", "Remote", "Remoto", PERFIL_INTL, True),
-    ("sem-idioma-sem-mercado-barrada", "Senior Data Analyst", "Remote", "Remoto", PERFIL_INTL, False),
+    # cargo remoto sem relação nenhuma com o mercado passava só por não ter
+    # nada que o rejeitasse.
+    ("spanish-speaking-sem-mercado-passa", "Spanish Speaking Product Owner", "Remote", "Remoto", PERFIL_INTL, True),
+    ("product-manager-latam-passa", "Product Manager LATAM", "Remote", "Remoto", PERFIL_INTL, True),
+    ("sem-idioma-sem-mercado-barrada", "Senior Product Manager", "Remote", "Remoto", PERFIL_INTL, False),
     # Mercado CONFIRMADO no texto dispensa o sinal de idioma no título — o
     # país hispanofalante já é o próprio sinal.
-    ("mercado-confirmado-dispensa-idioma-no-titulo", "Senior Data Analyst", "Remote - Espanha", "Remoto", PERFIL_INTL, True),
+    ("mercado-confirmado-dispensa-idioma-no-titulo", "Senior Product Manager", "Remote - Espanha", "Remoto", PERFIL_INTL, True),
 
     # Perfil Brasil: cargo e cidade são checados em campos separados
     # (título vs. local) — cidade fora da lista aceita barra mesmo com
     # cargo batendo.
-    ("cidade-fora-da-lista-barrada", "Analista de Dados", "Nova York", "Presencial", PERFIL_BR, False),
-    ("cargo-fora-do-escopo-barrado", "Vendedor Externo", "Recife, PE", "Presencial", PERFIL_BR, False),
-    ("cargo-forte-cidade-aceita-passa", "Analista de Dados Pleno", "Recife, PE", "Presencial", PERFIL_BR, True),
-    # keywords_ambiguo (ex: "Business Analyst") só conta com qualificador
-    # de dados junto no título — sozinho é ruído de outra área (RH,
-    # finanças).
-    ("cargo-ambiguo-sem-qualificador-barrado", "Business Analyst", "Recife, PE", "Presencial", PERFIL_BR, False),
-    ("cargo-ambiguo-com-qualificador-passa", "Business Analyst com SQL", "Recife, PE", "Presencial", PERFIL_BR, True),
+    ("cidade-fora-da-lista-barrada", "Product Owner", "Nova York", "Presencial", PERFIL_BR, False),
+    ("cargo-fora-do-escopo-barrado", "Vendedor Externo", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    ("cargo-forte-cidade-aceita-passa", "Product Owner Pleno", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    # Escopo antigo (Dados/BI) não deve mais passar sozinho: o radar virou
+    # produto/trainee e "Analista de Dados" deixou de ser cargo forte — o
+    # vocabulário de dados sobrou só como QUALIFICADORES_DOMINIO.
+    ("cargo-do-escopo-antigo-barrado", "Analista de Dados Pleno", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    # keywords_ambiguo (ex: "Trainee", "Business Analyst") só conta com
+    # qualificador de domínio junto no título — sozinho é ruído de outra
+    # área (banco, varejo, RH, finanças).
+    ("trainee-sem-qualificador-barrado", "Programa Trainee 2026", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    ("trainee-com-qualificador-passa", "Trainee de Tecnologia", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    ("cargo-ambiguo-sem-qualificador-barrado", "Business Analyst", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    ("cargo-ambiguo-com-qualificador-passa", "Business Analyst de Produto", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    # MEDIDO ao vivo na Gupy: o card corta o nome da cidade em ~10
+    # caracteres ("Santo Andr... - SP"). CIDADES tem as duas grafias por
+    # causa disso — nenhuma das duas cobre a outra (borda de palavra).
+    ("cidade-truncada-pela-gupy-passa", "Product Owner", "Santo Andr... - SP", "Presencial", PERFIL_BR, True),
+    ("cidade-por-extenso-passa", "Product Owner", "São Bernardo do Campo - SP", "Presencial", PERFIL_BR, True),
+    ("outro-estado-truncado-barrado", "Product Owner", "Rio de Jan... - RJ", "Presencial", PERFIL_BR, False),
+    # Ferramenta/método no título só aprova com palavra de cargo junto —
+    # espelho da regra de cargo ambíguo (ver FERRAMENTAS_TITULO).
+    ("ferramenta-sem-cargo-barrada", "Desenvolvedor Java (time Scrum)", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    ("ferramenta-com-cargo-passa", "Analista Scrum", "São Paulo, SP", "Presencial", PERFIL_BR, True),
 ]
 
 
@@ -210,7 +226,7 @@ CASOS_PUBLICACAO_ANTIGA = [
 )
 def test_publicacao_antiga(nome, publicado_em, esperado):
     job = Job(
-        titulo="Analista de Dados", empresa="Teste", local="Recife, PE",
+        titulo="Product Owner", empresa="Teste", local="São Paulo, SP",
         link=f"https://teste.invalido/{nome}", site="Teste", modalidade="Presencial",
         publicado_em=publicado_em,
     )

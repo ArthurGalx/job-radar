@@ -22,7 +22,7 @@ from config import (
     KEYWORDS,
     KEYWORDS_CARGO_FORTE,
     KEYWORDS_CARGO_AMBIGUO,
-    QUALIFICADORES_DADOS,
+    QUALIFICADORES_DOMINIO,
     FERRAMENTAS_TITULO,
     QUALIFICADORES_CARGO,
     CIDADES,
@@ -34,6 +34,8 @@ from config import (
 )
 from config_intl import (
     KEYWORDS_INTL,
+    KEYWORDS_AMBIGUO_INTL,
+    QUALIFICADORES_DOMINIO_INTL,
     TERMOS_BUSCA_INTL,
     TERMOS_POR_CICLO_INTL,
     LOCATIONS_INTL,
@@ -93,12 +95,13 @@ class Perfil:
     max_scrapers_concorrentes: int = 4
 
 
-# Regra primária: cidade brasileira (Nordeste) ou "Remoto" com mercado
+# Regra primária: São Paulo/Grande SP (ver CIDADES em config.py — era o
+# Nordeste até a virada pro escopo de produto) ou "Remoto" com mercado
 # Brasil/LATAM/Portugal/Espanha aceito (ver Job.escopo_remoto).
 _REGRAS_BR = RegrasFiltro(
     keywords_forte=KEYWORDS_CARGO_FORTE,
     keywords_ambiguo=KEYWORDS_CARGO_AMBIGUO,
-    qualificadores_dados=QUALIFICADORES_DADOS,
+    qualificadores_dominio=QUALIFICADORES_DOMINIO,
     ferramentas_titulo=FERRAMENTAS_TITULO,
     qualificadores_cargo=QUALIFICADORES_CARGO,
     cidades=CIDADES,
@@ -112,7 +115,7 @@ _REGRAS_BR = RegrasFiltro(
 _REGRAS_BR_IBERIA = RegrasFiltro(
     keywords_forte=KEYWORDS_CARGO_FORTE,
     keywords_ambiguo=KEYWORDS_CARGO_AMBIGUO,
-    qualificadores_dados=QUALIFICADORES_DADOS,
+    qualificadores_dominio=QUALIFICADORES_DOMINIO,
     ferramentas_titulo=FERRAMENTAS_TITULO,
     qualificadores_cargo=QUALIFICADORES_CARGO,
     cidades=CIDADES_EUROPA_IBERICA,
@@ -143,6 +146,13 @@ _REGRAS_BR_IBERIA = RegrasFiltro(
 # vagas brutas retornadas, somado por fonte). Gupy e LinkedIn confirmam o
 # que foi medido à parte (Gupy ~2,6%); Catho, GeekHunter e 99Jobs ficam
 # abaixo de 1%.
+#
+# ATENÇÃO: todos os percentuais acima (e a investigação de Trampos/99Jobs)
+# foram medidos com o radar buscando DADOS/BI. O escopo virou produto/
+# trainee — o rendimento por fonte pode mudar bastante (vaga de produto se
+# concentra em LinkedIn e Gupy; programa de trainee é forte em Gupy e
+# Sólides). Vale remedir antes de mexer em frequencia com base nesses
+# números.
 #
 # WeWorkRemotelyIntlScraper reaproveitado aqui (não duplicado): é agregador
 # de vaga 100% remota que cobre o mercado "remoto internacional" que
@@ -178,8 +188,10 @@ PERFIL_BR = Perfil(
 
 
 # Regra primária: só remoto ("Remote"/"Remoto" em CIDADES_INTL), mercado
-# LATAM/Portugal/Espanha aceito. Sem cargo ambíguo/ferramenta ainda nesse
-# perfil — simples de propósito por ser o mais novo dos dois.
+# LATAM/Portugal/Espanha aceito. Cargo ambíguo passou a existir aqui também
+# (ver KEYWORDS_AMBIGUO_INTL e o MEDIDO em config_intl.py: "Business
+# Analyst" como cargo forte trazia BA de ERP/Salesforce/SWIFT em massa).
+# Ferramenta continua sem uso nesse perfil — não houve caso que pedisse.
 #
 # idiomas_exigidos: sem mercado declarado, exige espanhol/português/LATAM
 # no título (ver IDIOMAS_EXIGIDOS_INTL e comentário em RegrasFiltro) — a
@@ -187,8 +199,8 @@ PERFIL_BR = Perfil(
 # vaga em si.
 _REGRAS_INTL = RegrasFiltro(
     keywords_forte=KEYWORDS_INTL,
-    keywords_ambiguo=[],
-    qualificadores_dados=[],
+    keywords_ambiguo=KEYWORDS_AMBIGUO_INTL,
+    qualificadores_dominio=QUALIFICADORES_DOMINIO_INTL,
     ferramentas_titulo=[],
     qualificadores_cargo=[],
     cidades=CIDADES_INTL,
@@ -201,8 +213,8 @@ _REGRAS_INTL = RegrasFiltro(
 # remoto) rejeitaria. DESLIGADO — mesmo motivo do eixo BR acima.
 _REGRAS_INTL_IBERIA = RegrasFiltro(
     keywords_forte=KEYWORDS_INTL,
-    keywords_ambiguo=[],
-    qualificadores_dados=[],
+    keywords_ambiguo=KEYWORDS_AMBIGUO_INTL,
+    qualificadores_dominio=QUALIFICADORES_DOMINIO_INTL,
     ferramentas_titulo=[],
     qualificadores_cargo=[],
     cidades=CIDADES_EUROPA_IBERICA,

@@ -13,31 +13,72 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DB_PATH, CIDADES_EUROPA
 
 # Cargo em múltiplos idiomas — vaga internacional pode ter o anúncio escrito
 # em inglês, português ou espanhol, dependendo de quem contratou.
+#
+# Escopo virou PRODUTO junto com o perfil BR (ver cabeçalho do config.py):
+# eram cargos de Dados/BI (Data Analyst, BI Analyst, Analista de Datos...).
+# Trainee NÃO entra aqui de propósito — programa de trainee é ritual de
+# empresa grande do mercado local, não existe como vaga remota contratando
+# estrangeiro; buscar isso lá fora só gastaria sessão de busca.
+#
+# O eixo de Data Annotation / AI Evaluator (Data Annotator, AI Trainer,
+# Search Quality Rater...) SAIU: é trabalho de rotular dado pra treinar IA,
+# nicho remoto que paga em dólar mas que não constrói carreira de produto —
+# fora do escopo pedido. Fácil de recolocar (é só voltar os 6 títulos e os
+# termos de busca correspondentes) se a prioridade mudar pra renda remota.
 KEYWORDS_INTL = [
-    "Data Analyst",
-    "Business Intelligence",
-    "BI Analyst",
-    "Data Analytics",
-    "Data Specialist",
-    "Analista de Dados",
-    "Business Analyst",
+    "Product Owner",
+    "Product Manager",
+    "Associate Product Manager",
+    "Product Analyst",
+    "Product Operations",
+    "Junior Product Manager",
     # Nomenclatura em espanhol
-    "Analista de Datos",
-    "Analítica de Datos",
-    "Analista de Inteligencia de Negocios",
-    "Especialista en Datos",
-    "Analista de Business Intelligence",
-    "Analista de Reportes",
-    # Eixo separado: Data Annotation / AI Evaluator — não é análise de
-    # dados, é rotular/avaliar dado pra treinar IA, mas é um nicho remoto
-    # que contrata muito por idioma (PT-BR/ES) e paga em dólar, então entra
-    # como categoria própria de cargo, não mistura com as de análise.
-    "Data Annotator",
-    "Data Annotation",
-    "AI Evaluator",
-    "AI Trainer",
-    "Data Labeler",
-    "Search Quality Rater",
+    "Analista de Producto",
+    "Gerente de Producto",
+    "Dueño de Producto",
+    "Propietario de Producto",
+    # Nomenclatura em português
+    "Analista de Produto",
+    "Analista de Produtos",
+    "Gerente de Produto",
+]
+
+# MEDIDO contra as 1.168 vagas do jobs.db real: "Business Analyst" como
+# cargo FORTE (era assim quando o perfil buscava dados/BI) sozinho respondia
+# por ~60 das ~79 aprovações do perfil internacional — e o que entrava era
+# BA de ERP/Salesforce/SWIFT/Finance & Risk em Lisboa, Madrid, Querétaro:
+# cargo homônimo de outra especialidade, nada de produto. Passou pro eixo
+# AMBÍGUO (mesma regra do perfil BR): só conta com qualificador de domínio
+# junto no título.
+#
+# Esse perfil não tinha eixo ambíguo nenhum até aqui (keywords_ambiguo=[] em
+# perfis.py) — a simplicidade fazia sentido enquanto todo cargo da lista era
+# inequívoco; "Business Analyst" nunca foi.
+KEYWORDS_AMBIGUO_INTL = [
+    "Business Analyst",
+    "Analista de Negocio",
+    "Analista de Negócios",
+    "Project Manager",
+    "Program Manager",
+]
+
+# Mesmo papel do QUALIFICADORES_DOMINIO do config.py, em versão multilíngue:
+# confirma que o cargo ambíguo é de produto/tech.
+QUALIFICADORES_DOMINIO_INTL = [
+    "product",
+    "producto",
+    "produto",
+    "digital",
+    "saas",
+    "platform",
+    "plataforma",
+    "startup",
+    "e-commerce",
+    "ecommerce",
+    "fintech",
+    "marketplace",
+    "agile",
+    "scrum",
 ]
 
 # Termos de busca: cargo + sinal de idioma (português/espanhol/bilíngue) ou
@@ -45,61 +86,52 @@ KEYWORDS_INTL = [
 # "data analyst" sozinho aqui — isso é o mundo inteiro sem filtro nenhum de
 # idioma, a maioria fora do nosso alcance.
 TERMOS_BUSCA_INTL = [
-    "data analyst spanish speaker",
-    "data analyst spanish speaking",
-    "data analyst portuguese speaker",
-    "data analyst portuguese speaking",
-    "bilingual data analyst spanish",
-    "bilingual data analyst portuguese",
-    "business intelligence spanish speaker",
-    "business intelligence spanish speaking",
-    "business intelligence portuguese speaker",
-    "business intelligence portuguese speaking",
-    "remote data analyst latam",
-    "remote data analyst latin america",
-    "data analyst spanish market",
-    "business intelligence spanish markets",
-    "analista de datos remoto",
+    "product owner spanish speaker",
+    "product owner portuguese speaker",
+    "product manager spanish speaker",
+    "product manager portuguese speaker",
+    "bilingual product manager spanish",
+    "bilingual product owner portuguese",
+    "remote product owner latam",
+    "remote product manager latam",
+    "remote product manager latin america",
+    "product manager spanish market",
+    "associate product manager remote",
+    "junior product manager remote",
+    "analista de producto remoto",
+    "product owner remoto",
     # MEDIDO ao vivo: vaga real ("Business Analyst (Colombia) - Remote",
     # Connect Tech+Talent) aparece em location=Colombia&f_WT=2 pro termo
     # bare "business analyst" — testei "spanish speaker", "business
     # intelligence spanish speaker", "remote data analyst latin america" e
     # "latam" contra a mesma vaga, location e filtro remoto: nenhum achou
     # (o anúncio não repete nenhuma dessas frases). O comentário original
-    # lá em cima ("não faz sentido buscar só 'data analyst' sozinho, é o
-    # mundo inteiro sem idioma") não vale AQUI: todo termo desta lista já
-    # roda escopado por país (LOCATIONS_INTL) + remoto (f_WT=2) — nunca é
-    # busca global. E o filtro de idioma pós-busca (RegrasFiltro.
-    # idiomas_exigidos) só entra em jogo quando a vaga NÃO declara mercado
-    # nenhum no texto — quando o local já é um país aceito (ex: Colômbia),
-    # o PAÍS é o sinal, dispensa achar "spanish"/"portuguese" no título
-    # (mesma regra que já vale pro resto do filtro, ver job.py). Termo de
-    # cargo puro, escopado por país aceito, é seguro e fecha o vazamento:
-    # KEYWORDS_INTL aprova "Business Analyst"/"Data Analyst"/"Business
-    # Intelligence" como cargo forte, mas nenhum dos dois primeiros nunca
-    # era BUSCADO sozinho — só entravam por acidente, dentro de uma frase
-    # combinada.
+    # lá em cima ("não faz sentido buscar só o cargo sozinho, é o mundo
+    # inteiro sem idioma") não vale AQUI: todo termo desta lista já roda
+    # escopado por país (LOCATIONS_INTL) + remoto (f_WT=2) — nunca é busca
+    # global. E o filtro de idioma pós-busca (RegrasFiltro.idiomas_exigidos)
+    # só entra em jogo quando a vaga NÃO declara mercado nenhum no texto —
+    # quando o local já é um país aceito (ex: Colômbia), o PAÍS é o sinal,
+    # dispensa achar "spanish"/"portuguese" no título (mesma regra que já
+    # vale pro resto do filtro, ver job.py). Termo de cargo puro, escopado
+    # por país aceito, é seguro e fecha o vazamento: KEYWORDS_INTL aprova o
+    # cargo, mas ele nunca era BUSCADO sozinho — só entrava por acidente,
+    # dentro de uma frase combinada. ("data analyst"/"business intelligence"
+    # saíram junto com a virada de escopo; "business analyst" fica, é o
+    # cargo adjacente que sobrou.)
     "business analyst",
-    "data analyst",
-    "business intelligence",
-    # Eixo Data Annotation / AI Evaluator
-    "data annotation spanish speaker",
-    "data annotation portuguese speaker",
-    "ai evaluator spanish",
-    "ai evaluator portuguese",
-    "ai trainer portuguese speaker",
-    "ai trainer spanish speaker",
-    "remote data annotator latam",
+    "product owner",
+    "product manager",
     # Termos "soltos" (idioma/mercado sem cargo emparelhado na própria
     # busca) — diferente dos de cima, que sempre combinam cargo+idioma numa
     # frase só. MEDIDO: zero ocorrência de "Spanish"/"Español"/"LATAM" como
     # termo próprio no projeto — toda vaga que anuncia a vaga com o idioma
-    # em destaque ("Spanish Speaker — Data Analytics Role", "LATAM Remote
-    # Team") e não bate exatamente numa das frases combinadas acima ficava
-    # invisível pra busca. Não é o mesmo risco do comentário lá em cima
-    # (buscar só "data analyst" sozinho, sem NENHUM filtro de idioma) — aqui
-    # é o oposto, idioma sem cargo na busca, e o cargo continua sendo
-    # exigido depois por KEYWORDS_INTL antes de qualquer notificação.
+    # em destaque ("Spanish Speaker — Product Role", "LATAM Remote Team") e
+    # não bate exatamente numa das frases combinadas acima ficava invisível
+    # pra busca. Não é o mesmo risco do comentário lá em cima (buscar só o
+    # cargo sozinho, sem NENHUM filtro de idioma) — aqui é o oposto, idioma
+    # sem cargo na busca, e o cargo continua sendo exigido depois por
+    # KEYWORDS_INTL antes de qualquer notificação.
     "spanish speaker",
     "spanish speaking",
     "portuguese and spanish",

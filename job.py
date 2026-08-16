@@ -623,7 +623,13 @@ def extrair_data_publicacao(texto_card: str) -> str:
 # filtrado por senioridade — só é classificado, pra decidir isso na hora de
 # ler a notificação, não em deixar a vaga passar ou não.
 _NIVEIS_SENIORIDADE = [
-    ("Estágio/Trainee", (r"estagi[ao]", r"estagio", r"trainee")),
+    # "Trainee" e "Estágio" eram um nível só ("Estágio/Trainee"). Separados
+    # porque deixaram de ser equivalentes pro usuário: programa de trainee
+    # em tecnologia é ALVO declarado (ver _NIVEIS_SENIORIDADE_ALVO), estágio
+    # não é (graduação concluída). Um rótulo só não deixava o score
+    # distinguir os dois.
+    ("Trainee", (r"trainee",)),
+    ("Estágio", (r"estagi[ao]", r"estagio")),
     ("Júnior", (r"junior", r"jr\.?")),
     ("Pleno", (r"pleno", r"pl\.?")),
     ("Sênior", (r"senior", r"sr\.?", r"sênior")),
@@ -669,7 +675,12 @@ class RegrasFiltro:
     """
     keywords_forte: list[str]
     keywords_ambiguo: list[str]
-    qualificadores_dados: list[str]
+    # Era `qualificadores_dados` quando o radar só buscava vaga de dados/BI.
+    # Renomeado junto com a virada pro escopo de produto/trainee: o papel do
+    # campo nunca foi "dados", foi "o domínio que confirma que o cargo
+    # ambíguo é do escopo certo" — o nome antigo passou a descrever o
+    # conteúdo de uma configuração específica, não a regra.
+    qualificadores_dominio: list[str]
     ferramentas_titulo: list[str]
     qualificadores_cargo: list[str]
     cidades: list[str]
@@ -745,13 +756,17 @@ _PESO_MERCADO = 2
 _PESO_MERCADO_NAO_CONFIRMADO = 1  # remota sem mercado declarado no texto (aceita por padrão, sem confirmar)
 _PESO_IDIOMA = 1
 
-# Prioridade definida pelo usuário: Júnior e Pleno pontuam o teto de
-# senioridade (bônus). Sênior/Especialista/Liderança pontuam negativo
-# (acima do alvo, deságio). Estágio/Trainee fica neutro — nem é o alvo nem
-# é o problema de "vaga tolerável demais" que motivou o deságio (volume
-# desprezível: 0,3% da base). Nada disso é filtro — a vaga ainda notifica,
-# só muda a posição no ranking (imediata vs. digest, topo vs. fundo).
-_NIVEIS_SENIORIDADE_ALVO = {"Júnior", "Pleno"}
+# Prioridade definida pelo usuário: Trainee, Júnior e Pleno pontuam o teto
+# de senioridade (bônus). Sênior/Especialista/Liderança pontuam negativo
+# (acima do alvo, deságio). Estágio fica neutro-baixo — nem é o alvo (a
+# graduação já terminou) nem é o problema de "vaga tolerável demais" que
+# motivou o deságio. Nada disso é filtro — a vaga ainda notifica, só muda a
+# posição no ranking (imediata vs. digest, topo vs. fundo).
+#
+# Trainee entrou no ALVO junto com a virada pro escopo de produto: o pedido
+# passou a ser explicitamente "vaga de PO ou trainee", então programa de
+# trainee em tecnologia deixou de ser volume marginal e virou destino.
+_NIVEIS_SENIORIDADE_ALVO = {"Trainee", "Júnior", "Pleno"}
 _NIVEIS_SENIORIDADE_ACIMA_DO_ALVO = {"Sênior", "Especialista", "Liderança"}
 
 
@@ -930,13 +945,13 @@ class Job:
         de acentuação entre o texto do site e o que está no config.py.
 
         Cargo tem duas regras diferentes:
-        - keywords_forte: só existe mesmo em vaga de dados/BI, basta bater no
-          título.
+        - keywords_forte: título que já é inequívoco do escopo (ex: "Product
+          Owner"), basta bater no título.
         - keywords_ambiguo: também é usado em vaga de outra área (ex:
-          "Business Analyst" existe em RH, finanças etc.) — só conta se o
-          título TAMBÉM tiver um dos qualificadores (ex: "dados", "sql",
-          "power bi"). É o que permite ir adicionando cargo adjacente
-          (Product Analyst, CRM Analyst, Marketing Analyst) sem cada um virar
+          "Trainee" existe em banco/varejo/jurídico, "Business Analyst"
+          existe em RH e finanças) — só conta se o título TAMBÉM tiver um dos
+          qualificadores de domínio (ex: "produto", "tecnologia", "dados").
+          É o que permite ir adicionando cargo adjacente sem cada um virar
           fonte de ruído sozinho.
         """
         return self._avaliar(regras).aprovada
@@ -957,7 +972,7 @@ class Job:
             _normalizar(k) in titulo_norm for k in regras.keywords_ambiguo
         ) and any(
             _contem_termo(_normalizar(q), titulo_norm, aceitar_plural=True)
-            for q in regras.qualificadores_dados
+            for q in regras.qualificadores_dominio
         )
 
         # Espelho da regra acima: ferramenta no título só vale com cargo junto.
@@ -1063,14 +1078,13 @@ class Job:
           ambíguo+qualificador, 0 se só bateu por ferramenta (sem cargo
           nenhum no título).
         - Ferramenta no título (Power BI, SQL, Python...): 2.
-        - Senioridade: Júnior/Pleno (prioridade do usuário) = +2; título
-          sem nível classificável = +1 (não penaliza por falta de
+        - Senioridade: Trainee/Júnior/Pleno (prioridade do usuário) = +2;
+          título sem nível classificável = +1 (não penaliza por falta de
           informação); Sênior/Especialista/Liderança = -2 (MEDIDO: 25% da
           base é essa faixa, contra 5,5% Júnior/Pleno — 0 ponto pros dois
           grupos deixava "acima do alvo" empatado com "sem informação"; a
-          vaga continua notificando, só cai no ranking); Estágio/Trainee
-          = 0 (nem alvo nem o problema que motivou o deságio, volume
-          desprezível).
+          vaga continua notificando, só cai no ranking); Estágio = 0 (nem
+          alvo nem o problema que motivou o deságio).
         - Mercado: 2 quando não é remota (bate por cidade concreta — o
           mercado É a cidade buscada) ou quando é remota com escopo batendo
           um mercado aceito explicitamente; 1 quando é remota sem mercado
@@ -1098,7 +1112,7 @@ class Job:
         elif nivel == "Não especificado" or nivel.startswith("Nível "):
             pontos_senioridade = _PESO_SENIORIDADE_NEUTRA
         else:
-            pontos_senioridade = 0  # Estágio/Trainee — nem alvo nem acima, neutro-baixo
+            pontos_senioridade = 0  # Estágio — nem alvo nem acima, neutro-baixo
 
         if not av.bate_remoto or av.mercado_confirmado:
             pontos_mercado = _PESO_MERCADO
@@ -1123,11 +1137,13 @@ class Job:
 
         Sinal de cargo (sempre um dos três — bate_keyword exige pelo menos
         um pra aprovar), mesma prioridade de pontuar_relevancia:
-        - "Cargo forte": bateu keyword inequívoca de dados/BI.
-        - "Cargo ambíguo + qualificador": cargo genérico (ex: "Business
-          Analyst") só aprovado por causa do qualificador junto.
-        - "Ferramenta + cargo": aprovou por ferramenta no título (ex:
-          "Power BI"), não por palavra de cargo.
+        - "Cargo forte": bateu keyword inequívoca do escopo (ex: "Product
+          Owner").
+        - "Cargo ambíguo + qualificador": cargo genérico (ex: "Trainee",
+          "Business Analyst") só aprovado por causa do qualificador de
+          domínio junto.
+        - "Ferramenta + cargo": aprovou por ferramenta/método no título (ex:
+          "Scrum"), não por palavra de cargo.
 
         Mais " · idioma sem mercado" quando a vaga é remota, o texto não
         declarou mercado nenhum, e só passou no gate de geografia porque o

@@ -4,96 +4,142 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Cargo forte: título que só existe mesmo em vaga de dados/BI, sem
-# possibilidade real de ser outra área.
+# ESCOPO DO RADAR: vaga de PRODUTO (Product Owner / PM júnior / Analista de
+# Produto), TRAINEE em tecnologia e o eixo adjacente de OPERAÇÕES/AUTOMAÇÃO
+# (Business Analyst, Analista de Processos/Automação) — que é o que o
+# currículo mostra na prática (PO na Yuca, automação via Make/APIs, rituais
+# ágeis). O radar era calibrado pra Dados/BI antes; as keywords de dados
+# saíram do eixo de CARGO e sobraram só como QUALIFICADORES_DOMINIO (abaixo),
+# onde continuam servindo pra confirmar que um cargo ambíguo é de tech.
+
+# Cargo forte: título que já é inequivocamente de produto/tech, sem
+# possibilidade real de ser outra área. Basta bater no título.
 KEYWORDS_CARGO_FORTE = [
-    "Analista de Dados",
-    "Analista BI",
-    "Analista de BI",
-    "Business Intelligence",
-    "Data Analytics",
-    "Analista de Analytics",
-    "Data Analyst",
-    "Desenvolvedor BI",
-    "Consultor BI",
-    "Analista de Inteligência de Negócios",
-    "BI Developer",
-    "BI Analyst",
-    "Analista de Reporting",
-    "Analista de Inteligência de Mercado",
-    "Analista de Indicadores",
-    "Reporting Analyst",
-    "Insights Analyst",
-    "Data Insights Analyst",
-    "MIS Analyst",
-    "Analista de MIS",
-    "Assistente de BI",
-    "Auxiliar de BI",
-    "Analista de Inteligência Comercial",
-    "Data Specialist",
-    "Data Quality Analyst",
-    "Data Intelligence Analyst",
-    "BI & Analytics Analyst",
-    "Analytics Specialist",
-    "Especialista em Dados",
-    "Analista de Planejamento e Dados",
-    # "Datos" (espanhol) não é "Dados" (português) — nenhuma keyword em
-    # português cobre título em espanhol, mesmo sendo a mesma vaga. Faz
-    # sentido aqui no pipeline BR (não só em config_intl.py) porque
-    # LinkedInScraper já busca em Argentina/Chile (ver LOCATIONS_LINKEDIN).
-    "Analista de Datos",
-    "Analítica de Datos",
+    "Product Owner",
+    "Product Manager",
+    "Associate Product Manager",
+    "Product Analyst",
+    "Product Operations",
+    "Product Ops",
+    "Analista de Produto",
+    # Plural precisa de entrada própria: o match é por borda de palavra
+    # (ver _contem_termo em job.py), então "Analista de Produto" NÃO bate
+    # "Analista de Produtos".
+    "Analista de Produtos",
+    "Analista de Produto Digital",
+    "Assistente de Produto",
+    "Gerente de Produto",
+    "Gestor de Produto",
+    "Dono do Produto",
+    # "Product Discovery" fica só em TERMOS_FERRAMENTA (busca), não aqui:
+    # é método, não cargo — como keyword duplicaria o termo de busca (a
+    # derivação TERMOS_CARGO já puxa toda KEYWORDS) e gastaria uma sessão
+    # de busca à toa.
+    "Analista de Automação",
+    "Analista de Automações",
+    "Analista de Processos e Automação",
+    # Espanhol: LinkedInScraper deste perfil também busca em Argentina/Chile/
+    # México/Colômbia (ver LOCATIONS_LINKEDIN_REMOTO_APENAS), e nenhuma
+    # keyword em português cobre título em espanhol.
+    "Analista de Producto",
+    "Gerente de Producto",
+    "Dueño de Producto",
 ]
 
 # Cargo ambíguo: título que também é usado em vaga sem nada a ver com
-# dados/BI (ex: "Business Analyst" e "Analista de Negócios" existem em
-# TI, finanças, RH, operações... qualquer área). Só conta como match se o
-# título TAMBÉM tiver um QUALIFICADORES_DADOS junto — é o que permite ir
-# adicionando cargo adjacente (Product Analyst, CRM Analyst, Marketing
-# Analyst etc.) sem cada um virar fonte de ruído sozinho.
+# produto/tecnologia — "Trainee" existe em banco, varejo, jurídico e
+# indústria; "Business Analyst" e "Analista de Negócios" existem em
+# finanças, RH, operações. Só conta como match se o título TAMBÉM tiver um
+# QUALIFICADORES_DOMINIO junto ("Trainee de Tecnologia", "Business Analyst
+# de Produto") — é o que permite manter cargo adjacente no radar sem cada
+# um virar fonte de ruído sozinho.
 KEYWORDS_CARGO_AMBIGUO = [
+    "Trainee",
+    # "Estágio"/"Estagiário" ficam FORA: o pedido é PO/trainee, e a
+    # graduação já terminou (dez/2025) — vaga de estágio seria degrau pra
+    # trás, e "estágio" é um dos termos de maior volume bruto dos portais
+    # (cada busca dessas custa uma sessão de navegador igual às outras).
     "Business Analyst",
     "Analista de Negócios",
-    "Business Analytics",
+    "Analista de Sistemas",
+    "Analista de Processos",
+    "Analista de Operações",
+    "Analista Funcional",
+    "Analista de Inovação",
+    "Analista de Projetos",
+    "Project Manager",
+    "Program Manager",
     "Analista de Performance",
 ]
 
 # Termo que precisa aparecer junto no título quando o cargo é ambíguo, pra
-# confirmar que é vaga de dados/BI e não de outra área qualquer.
-QUALIFICADORES_DADOS = [
+# confirmar que é vaga de produto/tecnologia e não de outra área qualquer.
+# É aqui que o vocabulário de dados (dados/data/BI/SQL/analytics) continua
+# vivo: não aprova vaga sozinho, mas confirma que um "Trainee"/"Business
+# Analyst" está no escopo de tech.
+QUALIFICADORES_DOMINIO = [
+    "produto",
+    "produtos",
+    "product",
+    "producto",
+    "tecnologia",
+    "tecnología",
+    "technology",
+    "tech",
+    "ti",
+    "it",
+    "digital",
+    "software",
+    "sistemas",
+    "plataforma",
+    "saas",
+    "startup",
+    "inovação",
+    "automação",
+    "automation",
+    "ágil",
+    "agile",
+    "scrum",
+    "growth",
+    "e-commerce",
+    "ecommerce",
     "dados",
     "data",
     "bi",
     "sql",
-    "power bi",
     "analytics",
-    "kpi",
-    "dashboard",
-    "métricas",
-    "reporting",
-    "insights",
 ]
 
-# Ferramenta que aparece como núcleo do título ("Analista de Power BI").
-# Só conta como match se o título TAMBÉM tiver uma palavra de cargo — é o
-# espelho da regra de KEYWORDS_CARGO_AMBIGUO: lá o cargo é ambíguo e pede
-# domínio, aqui a ferramenta é ambígua e pede cargo. Sem isso, "Power BI"
-# sozinho aprovaria "Power BI Senior" e "Desenvolvedor (Power BI + Python)",
-# que são vaga de desenvolvimento, não de análise.
+# Ferramenta/framework que aparece como núcleo do título ("Analista de
+# Processos - Scrum"). Só conta como match se o título TAMBÉM tiver uma
+# palavra de cargo — é o espelho da regra de KEYWORDS_CARGO_AMBIGUO: lá o
+# cargo é ambíguo e pede domínio, aqui a ferramenta é ambígua e pede cargo.
+# Sem isso, "Scrum" sozinho aprovaria "Desenvolvedor (time Scrum)", que é
+# vaga de dev, não de produto.
 FERRAMENTAS_TITULO = [
-    "Power BI",
+    "Scrum",
+    "Agile",
+    "Ágil",
+    "Jira",
+    "No-Code",
+    "Low-Code",
 ]
 
-# Palavra de cargo que confirma que a vaga de ferramenta é de análise.
-# "desenvolvedor"/"developer"/"engenheiro" ficam FORA de propósito: é o que
-# mantém vaga de dev fora do radar.
+# Palavra de cargo que confirma que a vaga de ferramenta é de produto/
+# processo. "desenvolvedor"/"developer"/"engenheiro" ficam FORA de
+# propósito: é o que mantém vaga de dev fora do radar.
 QUALIFICADORES_CARGO = [
     "analista",
     "analyst",
+    "owner",
+    "manager",
+    "trainee",
     "especialista",
     "specialist",
     "consultor",
     "consultant",
+    "assistente",
+    "coordenador",
 ]
 
 KEYWORDS = KEYWORDS_CARGO_FORTE + KEYWORDS_CARGO_AMBIGUO
@@ -116,29 +162,35 @@ TERMOS_CARGO_EXTRA = [
     # termos mais amplos que a keyword exata, mantidos por dar rede mais
     # larga na busca (a keyword em si é mais restrita, de propósito, pra
     # não gerar falso positivo no filtro de título).
-    "power bi",
-    "inteligência de mercado",
+    "product owner junior",
+    "product manager junior",
+    "produto digital",
+    "gestão de produtos",
+    # "Trainee" sozinho já entra via KEYWORDS (derivação abaixo) e traz o
+    # volume bruto de trainee de TODA área — estes dois vão direto no
+    # recorte que interessa, pra não depender só do filtro pós-busca.
+    "programa de trainee tecnologia",
+    "trainee produto",
 ]
 
 TERMOS_CARGO = sorted(set(k.lower() for k in KEYWORDS) | set(TERMOS_CARGO_EXTRA))
 
-# MEDIDO em jobradar.log (12 rodízios completos, Gupy+99Jobs+GeekHunter+
-# Solides): "dax" e "power query" nunca resultaram em nenhuma vaga nova
-# notificada nessas 4 fontes — 0 em 48 buscas cada, a maioria vazia
-# ("0 resultados reais") e o resto timeout. "microsoft fabric" teve 1 vaga
-# no log inteiro (363 notificações) com o termo no título, e essa vaga
-# também tinha "Power BI"/"Analista de BI" no título — já seria achada por
-# termo que continua na lista. Timeout: os 3 termos concentraram metade
-# (13 de 26) dos timeouts dessas 4 fontes sendo só 3 dos 42 termos (7%) —
-# confirma o padrão relatado. Removidos por render zero e custarem sessão
-# igual a um termo de cargo.
+# Ferramenta/método como rede extra pra achar vaga com título atípico que
+# nenhum termo de cargo pegaria. Continua valendo a regra geral: termo de
+# ferramenta só vira notificação se o TÍTULO da vaga bater numa keyword de
+# cargo (ou em FERRAMENTAS_TITULO + QUALIFICADORES_CARGO) — buscar "scrum"
+# não faz vaga de dev entrar.
+#
+# A lista antiga era de stack de dados (sql/python/tableau/qlik/looker/
+# bigquery). Saiu junto com o eixo de cargo de dados: sem "Analista de
+# Dados" nas keywords, esses termos passariam a buscar muito e aprovar
+# nada. O vocabulário de dados que sobrou vive em QUALIFICADORES_DOMINIO,
+# onde ainda serve pra confirmar cargo ambíguo de tech.
 TERMOS_FERRAMENTA = [
-    "sql",
-    "python",
-    "tableau",
-    "qlik",
-    "looker",
-    "bigquery",
+    "scrum",
+    "product discovery",
+    "automação de processos",
+    "no-code",
 ]
 
 TERMOS_BUSCA = TERMOS_CARGO + TERMOS_FERRAMENTA
@@ -154,19 +206,40 @@ TERMOS_BUSCA = TERMOS_CARGO + TERMOS_FERRAMENTA
 # quantos ciclos até cobrir tudo de novo, não o custo de cada ciclo.
 TERMOS_POR_CICLO = 10
 
+# Whitelist de local: São Paulo (capital + Grande SP/interior próximo, onde
+# está concentrada praticamente toda vaga de produto do país) + Remoto.
+#
+# A lista era do Nordeste (Campina Grande, João Pessoa, Recife, Natal...) —
+# trocada, não ampliada: o usuário mora em São Paulo. Manter as duas
+# regiões só encheria a notificação de vaga presencial a 2.000 km.
+#
+# "São Paulo" bate tanto a capital quanto o texto de local que escreve o
+# estado por extenso ("Campinas, São Paulo") — as cidades da região
+# metropolitana abaixo existem pros anúncios que só citam a cidade
+# ("Barueri - SP", "Alphaville").
 CIDADES = [
     "Remoto",
-    "Campina Grande",
-    "João Pessoa",
-    "Recife",
-    "Natal",
-    "Maceió",
-    "Jaboatão",
-    "Aracaju",
-    "Teresina",
-    "São Luís",
-    "Petrolina",
-    "Caruaru",
+    "São Paulo",
+    "Barueri",
+    "Alphaville",
+    "Osasco",
+    "Guarulhos",
+    "Diadema",
+    "Cotia",
+    "Campinas",
+    "Santo André",
+    "São Bernardo",
+    "São Caetano",
+    # MEDIDO ao vivo na Gupy: o card corta o nome da cidade em ~10
+    # caracteres ("Rio de Jan... - RJ", "Ribeirão P... - SP"). Cidade com
+    # nome mais longo que isso nunca bateria escrita por extenso, então as
+    # três acima precisam da forma cortada TAMBÉM — o match é por borda de
+    # palavra (ver _contem_termo em job.py), e uma forma não cobre a outra:
+    # "São Bernar" não bate "São Bernardo do Campo" (a borda cai no meio da
+    # palavra) e "São Bernardo" não bate "São Bernar...".
+    "Santo Andr",
+    "São Bernar",
+    "São Caeta",
 ]
 
 # MEDIDO: "Data Analyst @ Lisboa" e "Analista de Datos @ Madrid" reprovavam
@@ -254,15 +327,20 @@ INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 180))
 # limiar notifica na hora (como sempre foi); abaixo disso, fica na fila do
 # digest diário — ver _enviar_digest_diario em main.py.
 #
-# MEDIDO: rodei o score contra as ~305 vagas do jobs.db real que ainda
-# batem as regras atuais. Distribuição: score 4 (2%), 5 (24%), 6 (67%),
-# 7 (5%), 8 (2%) — nada em 9-10 na amostra (exige acertar praticamente
-# todo sinal ao mesmo tempo: cargo forte + ferramenta + senioridade alvo +
-# mercado confirmado). Limiar 7 deixa ~7% imediata e ~93% no digest — bate
-# com o pedido ("vaga de score alto na hora, resto agrupado"); 6 deixava
-# 74% imediata (pouca redução de ruído); 8 deixava só 2% (digest com
-# praticamente tudo, quase nenhuma vaga "excelente" se destacando na hora).
-LIMIAR_DIGEST_IMEDIATO = 7
+# A medição antiga (~305 vagas do jobs.db de Dados/BI: 67% em score 6, só
+# 7% >= 7) justificava limiar 7. Ela não vale mais depois da virada pro
+# escopo de produto: o eixo de FERRAMENTA valia +2 com frequência no mundo
+# BI ("Analista de BI - Power BI", "Analista de Dados SQL"), e título de
+# produto quase nunca traz ferramenta ("Product Owner Pleno" e ponto). Isso
+# desloca a distribuição inteira ~2 pontos pra baixo — com limiar 7,
+# praticamente NADA notificaria na hora e o digest viraria o único canal.
+#
+# Limiar 6 recoloca no imediato o alvo real do pedido: PO/PM júnior-pleno
+# (cargo forte 3 + senioridade alvo 2) tanto remoto (+1) quanto presencial
+# em SP (+2), e trainee de tech presencial. Vaga sem senioridade no título
+# ou acima do alvo (sênior/gerência) cai pro digest, que é o que se quer.
+# Reavaliar com dado real depois de alguns dias rodando no escopo novo.
+LIMIAR_DIGEST_IMEDIATO = 6
 
 # Hora UTC em que o digest diário dispara (uma vez por perfil, por dia —
 # ver _enviar_digest_diario). 0 = meia-noite UTC = 21h em Brasília (UTC-3).
