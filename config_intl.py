@@ -1,6 +1,8 @@
 
-# Config do programa internacional (busca vaga remota fora do Brasil que
-# aceita/pede português ou espanhol). Separado do config.py de propósito —
+# Config do programa internacional (busca vaga remota fora do Brasil em
+# INGLÊS ou PORTUGUÊS — os idiomas que o usuário fala; o perfil nasceu
+# mirando também espanhol e foi reduzido quando ficou claro que ele não
+# fala a língua). Separado do config.py de propósito —
 # ver decisão registrada na conversa: misturar ia forçar o filtro de cidade
 # do Nordeste e as keywords em português do JobRadar original a servir dois
 # propósitos diferentes ao mesmo tempo, deixando os dois mais frágeis.
@@ -11,8 +13,8 @@
 # internacional nunca vai ter o mesmo link de uma vaga brasileira).
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DB_PATH, CIDADES_EUROPA_IBERICA  # noqa: F401
 
-# Cargo em múltiplos idiomas — vaga internacional pode ter o anúncio escrito
-# em inglês, português ou espanhol, dependendo de quem contratou.
+# Cargo em inglês e português — os dois idiomas em que o anúncio pode vir e
+# que o usuário lê.
 #
 # Escopo virou PRODUTO junto com o perfil BR (ver cabeçalho do config.py):
 # eram cargos de Dados/BI (Data Analyst, BI Analyst, Analista de Datos...).
@@ -30,9 +32,9 @@ KEYWORDS_INTL = [
     "Associate Product Manager",
     "Product Analyst",
     "Product Operations",
-    # Nomenclatura em espanhol
-    "Dueño de Producto",
-    "Propietario de Producto",
+    # Nomenclatura em português (a espanhola saiu junto com o resto do eixo
+    # hispanofalante — ver TERMOS_EXCLUIDOS_INTL).
+    "Dono do Produto",
 ]
 
 # MEDIDO contra as 1.168 vagas do jobs.db real: "Business Analyst" como
@@ -54,13 +56,10 @@ KEYWORDS_AMBIGUO_INTL = [
     # busca. Manter forte aqui só mudaria o canal por onde o mesmo lixo
     # chega.
     "Product Manager",
-    "Gerente de Producto",
     "Gerente de Produto",
-    "Analista de Producto",
     "Analista de Produto",
     "Analista de Produtos",
     "Business Analyst",
-    "Analista de Negocio",
     "Analista de Negócios",
     "Project Manager",
     "Program Manager",
@@ -90,19 +89,17 @@ QUALIFICADORES_DOMINIO_INTL = [
 # "data analyst" sozinho aqui — isso é o mundo inteiro sem filtro nenhum de
 # idioma, a maioria fora do nosso alcance.
 TERMOS_BUSCA_INTL = [
-    "product owner spanish speaker",
     "product owner portuguese speaker",
-    "product manager spanish speaker",
     "product manager portuguese speaker",
-    "bilingual product manager spanish",
     "bilingual product owner portuguese",
+    "english speaking product owner",
     "remote product owner latam",
     "remote product manager latam",
     "remote product manager latin america",
-    "product manager spanish market",
+    "product owner brazil remote",
+    "product manager brazil remote",
     "associate product manager remote",
     "junior product manager remote",
-    "analista de producto remoto",
     "product owner remoto",
     # MEDIDO ao vivo: vaga real ("Business Analyst (Colombia) - Remote",
     # Connect Tech+Talent) aparece em location=Colombia&f_WT=2 pro termo
@@ -136,10 +133,13 @@ TERMOS_BUSCA_INTL = [
     # cargo sozinho, sem NENHUM filtro de idioma) — aqui é o oposto, idioma
     # sem cargo na busca, e o cargo continua sendo exigido depois por
     # KEYWORDS_INTL antes de qualquer notificação.
-    "spanish speaker",
-    "spanish speaking",
-    "portuguese and spanish",
-    "spanish market",
+    #
+    # Os termos em espanhol ("spanish speaker", "spanish market"...) saíram:
+    # o usuário fala português e inglês, e buscar por espanhol era pedir
+    # exatamente a vaga que ele não pode aceitar. "latam" fica — a região
+    # inclui o Brasil e boa parte das vagas remotas de lá é em inglês.
+    "portuguese speaker",
+    "portuguese speaking",
     "latam",
 ]
 
@@ -158,19 +158,42 @@ TERMOS_BUSCA_INTL = [
 # mais a grafia em espanhol/português — busca casa com anúncio em inglês
 # na maioria das vezes, mas o TÍTULO que sobra pode vir em qualquer um dos
 # três idiomas.
+# O usuário fala português (nativo) e inglês (avançado) — espanhol não.
+# Espanhol SAIU desta lista e os termos de busca em espanhol saíram junto
+# (ver TERMOS_BUSCA_INTL): vaga que pede espanhol como requisito não serve,
+# e ela era a maioria do que este perfil buscava, porque o pipeline nasceu
+# mirando mercado hispanofalante.
+#
+# "english" entra com uma ressalva importante: quase todo anúncio
+# internacional é escrito em inglês, então exigir a PALAVRA "english" no
+# título não é filtro de idioma de verdade — é sinal de que o anúncio
+# destaca o idioma (ex: "English-speaking Product Owner"). Continua valendo
+# só pro caso de vaga remota SEM mercado declarado, que é quando não há
+# outro sinal nenhum (ver RegrasFiltro.idiomas_exigidos).
 IDIOMAS_EXIGIDOS_INTL = [
-    "spanish",
-    "espanol",
-    "español",
+    "english",
     "portuguese",
     "português",
     "portugues",
+    "brazil",
+    "brasil",
     "latam",
     "latin america",
     "america latina",
-    "hispanohablante",
     "lusofono",
     "lusófono",
+]
+
+# Vaga cujo TÍTULO exige espanhol é rejeitada mesmo passando em tudo o
+# resto. Sem isso, "Product Owner (Spanish Speaker) - Remote LATAM"
+# continuaria entrando pelo eixo de mercado (LATAM aceito), já que o gate
+# de idioma só olha vaga sem mercado declarado.
+TERMOS_EXCLUIDOS_INTL = [
+    "spanish",
+    "español",
+    "espanol",
+    "hispanohablante",
+    "castellano",
 ]
 
 # Rodízio de termos, mesmo mecanismo do TERMOS_POR_CICLO em config.py (ver
@@ -202,13 +225,14 @@ TERMOS_POR_CICLO_INTL = 10
 # países de LATAM entraram nominalmente, e "latam"/"latin america" como
 # texto dentro do termo de busca (acima) em vez de location. "Iberia" não
 # precisa de entrada própria — já é coberto por Spain + Portugal abaixo.
+# Reduzida a Portugal quando o perfil passou a valer só pra vaga em inglês
+# ou português: buscar em Spain/Mexico/Colombia/Argentina/Chile é procurar
+# vaga do mercado local hispanofalante, que é justamente a que não serve.
+# Vaga remota em inglês de qualquer país continua chegando pelo
+# WeWorkRemotely (agregador global de vaga remota, ver perfis.py) e pelos
+# termos com "latam"/"brazil remote", que não dependem de location.
 LOCATIONS_INTL = [
-    "Spain",
     "Portugal",
-    "Mexico",
-    "Colombia",
-    "Argentina",
-    "Chile",
 ]
 
 # Sem cidade nenhuma — só remoto, de qualquer país. "Remote" cobre o termo
@@ -242,30 +266,18 @@ CIDADES_INTL = ["Remote", "Remoto"]
 # inclusive quando o país não está no dicionário de job.py (ver
 # MEDIDO em _mercado_correspondente).
 MERCADOS_REMOTO_ACEITOS_INTL = [
+    # Só mercado onde a vaga é em português ou em inglês. Os países
+    # hispanofalantes saíram junto com a virada do perfil pra "inglês ou
+    # português" — vaga "Remote - Mexico"/"Remote - Chile" é anúncio do
+    # mercado local, em espanhol, que o usuário não fala.
     "Portugal",
-    "Espanha",
-    "México",
-    "Colômbia",
-    "Argentina",
-    "Chile",
-    "Peru",
-    "Uruguai",
-    "Paraguai",
-    "Bolívia",
-    "Equador",
-    "Venezuela",
-    "Costa Rica",
-    "Panamá",
-    "Guatemala",
-    "Honduras",
-    "El Salvador",
-    "Nicarágua",
-    "República Dominicana",
-    "Porto Rico",
-    "Cuba",
+    # Lusófonos: mesma língua, e o anúncio vem em português.
     "Angola",
     "Moçambique",
     "Cabo Verde",
+    # "LATAM" fica porque é guarda-chuva que inclui o Brasil, e vaga remota
+    # anunciada pra região inteira costuma ser de empresa que opera em
+    # inglês — diferente de vaga de um país hispanofalante específico.
     "LATAM",
 ]
 
@@ -304,10 +316,7 @@ ATIVAR_EIXO_IBERICO = False
 # bloquear acesso automatizado (principalmente de IP de nuvem/datacenter),
 # mesmo funcionando em teste manual.
 DOMINIOS_INDEED_INTL = {
-    "Espanha": "es.indeed.com",
+    # Só Portugal, mesmo motivo do LOCATIONS_INTL acima: domínio de país
+    # hispanofalante devolve vaga do mercado local, em espanhol.
     "Portugal": "pt.indeed.com",
-    "México": "mx.indeed.com",
-    "Colômbia": "co.indeed.com",
-    "Argentina": "ar.indeed.com",
-    "Chile": "cl.indeed.com",
 }

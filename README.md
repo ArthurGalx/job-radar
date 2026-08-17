@@ -9,7 +9,7 @@
 ![Playwright](https://img.shields.io/badge/Playwright-Scraping-2EAD33?style=for-the-badge&logo=playwright&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-Banco%20versionado-07405E?style=for-the-badge&logo=sqlite&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Cron-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
-![Tests](https://img.shields.io/badge/testes-87%20passing-success?style=for-the-badge)
+![Tests](https://img.shields.io/badge/testes-136%20passing-success?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-em%20produção-success?style=for-the-badge)
 
 **Autora:** Liliam Kezia Oliveira Souza
@@ -30,7 +30,7 @@ Entre 07 e 15 de agosto, o sistema já processou **1.052 vagas únicas**, sem in
 |---|---|
 | 📊 Vagas processadas (deduplicadas) | **1.052** |
 | 🔗 Concentração numa única fonte (LinkedIn) | **89,5%** |
-| 🧪 Testes automatizados (CI a cada push) | **87** |
+| 🧪 Testes automatizados (CI a cada push) | **136** |
 | 🌎 Fontes monitoradas em paralelo | **8** |
 | ⏱️ Frequência de checagem | **a cada 3h** |
 | 💰 Custo de infraestrutura | **R$ 0** |
@@ -63,7 +63,7 @@ Vaga de alta relevância chega na hora, com motivo da aprovação, nível e link
 |---|---|
 | **Busca** | Varre as fontes em paralelo, com rodízio de termos pra controlar custo por ciclo |
 | **Filtra** | Cargo (forte / ambíguo + qualificador / ferramenta + cargo), cidade ou mercado remoto, idioma |
-| **Pontua** | Score 0–10 por vaga: cargo, ferramenta, senioridade, mercado, idioma — soma de sinais, sem IA |
+| **Pontua** | Score por vaga: cargo, ferramenta, senioridade, mercado, idioma e distância de casa (vaga presencial/híbrida longe perde pontos) — soma de sinais, sem IA |
 | **Deduplica** | Por link e por empresa+título, pra pegar a mesma vaga republicada em fonte diferente |
 | **Notifica** | Alta relevância na hora; o resto num resumo diário ranqueado, melhor vaga no topo |
 | **Exporta** | Cada vaga aprovada vira uma linha no Google Sheets, via Apps Script publicado como web app — canal extra e best-effort: planilha fora do ar nunca impede notificação |
@@ -75,7 +75,7 @@ Vaga de alta relevância chega na hora, com motivo da aprovação, nível e link
 - **Score de relevância sem ML:** 5 sinais conhecidos (cargo, ferramenta, senioridade, mercado, idioma), pesos calibrados contra o histórico real do banco, não chutados.
 - **Zero infraestrutura:** GitHub Actions como motor de cron, SQLite como banco — versionado no próprio Git, o histórico de vagas já vistas *é* o commit.
 - **Resiliente:** nunca marca vaga como "vista" sem confirmar que a notificação saiu; alerta automático se metade das fontes falhar num ciclo; heartbeat diário confirmando que o robô ainda está de pé.
-- **87 testes automatizados em CI:** cada caso documenta um bug real já corrigido nesta base — não é cenário hipotético, é regressão registrada.
+- **136 testes automatizados em CI:** cada caso documenta um bug real já corrigido nesta base — não é cenário hipotético, é regressão registrada.
 
 ## 📁 Estrutura do repositório
 
@@ -94,7 +94,7 @@ obradar/
 ├── scrapers/ ← um módulo por fonte (LinkedIn, Gupy, Indeed...)
 ├── utils/
 │ └── filtro.py
-├── tests/ ← 87 casos, roda em CI a cada push
+├── tests/ ← 136 casos, roda em CI a cada push
 ├── data/
 │ └── jobs.db ← banco versionado (histórico de dedup)
 └── .github/workflows/
@@ -123,7 +123,7 @@ python main.py --perfil brasil internacional --once
 pytest tests/ -v
 ```
 
-87 casos parametrizados, cobrindo a camada de filtro, o parsing de callback do Telegram e o relatório de precisão — todos rodando automaticamente a cada push via GitHub Actions.
+136 casos parametrizados, cobrindo a camada de filtro, o parsing de callback do Telegram e o relatório de precisão — todos rodando automaticamente a cada push via GitHub Actions.
 
 ---
 

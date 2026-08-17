@@ -4,6 +4,10 @@ import hashlib
 import re
 import unicodedata
 
+# Sem ciclo: utils/geo.py importa _normalizar deste módulo DENTRO das
+# funções, justamente pra este import de topo poder existir.
+from utils.geo import RAIO_IDEAL_KM
+
 
 def _normalizar(texto: str) -> str:
     """Minúsculo e sem acento, pra comparação não depender de site nenhum
@@ -735,6 +739,15 @@ class RegrasFiltro:
     # mercado hispanofalante-lusófono explicitamente. None = não checa
     # (BR não precisa — fonte já é 100% brasileira/portuguesa).
     idiomas_exigidos: list[str] | None = None
+    # Blocklist de título: bate = REJEITA, por mais que o resto aprove.
+    # Todo o resto do filtro é allowlist (precisa de sinal positivo pra
+    # entrar); isso é o inverso, e existe pro caso em que o problema não é
+    # falta de sinal bom e sim presença de sinal ruim — hoje, vaga que exige
+    # espanhol no perfil internacional (o usuário fala português e inglês).
+    # Sem isso, "Product Owner (Spanish Speaker) - Remote LATAM" entrava
+    # pelo eixo de mercado, porque o gate de idioma só olha vaga SEM mercado
+    # declarado. None = não rejeita nada por título.
+    termos_excluidos: list[str] | None = None
 
 
 @dataclass
@@ -782,6 +795,16 @@ _PESO_SENIORIDADE_ACIMA_DO_ALVO = -2
 _PESO_MERCADO = 2
 _PESO_MERCADO_NAO_CONFIRMADO = 1  # remota sem mercado declarado no texto (aceita por padrão, sem confirmar)
 _PESO_IDIOMA = 1
+
+# Desconto por deslocamento, só pra vaga presencial/híbrida (ver
+# utils/geo.py). O usuário declarou raio confortável de 11 km; dentro dele
+# não há desconto, e fora dele o desconto é graduado em vez de eliminatório
+# — vaga boa longe continua chegando, só perde posição pra vaga boa perto.
+# Distância desconhecida não desconta nada, mesma regra de "não penalizar
+# por falta de informação" que já vale pra senioridade.
+_LIMITE_DISTANCIA_LONGE_KM = 20
+_PESO_DISTANCIA_LONGE = -1        # entre o raio ideal e o limite acima
+_PESO_DISTANCIA_MUITO_LONGE = -2  # além do limite
 
 # Prioridade definida pelo usuário: Trainee, Júnior e Pleno pontuam o teto
 # de senioridade (bônus). Sênior/Especialista/Liderança pontuam negativo
@@ -847,6 +870,13 @@ class Job:
     # relevancia — "" até lá. Só pra aparecer na notificação; não
     # influencia filtro nem score.
     motivo: str = ""
+    # Distância em km até onde o usuário mora, pra vaga presencial/híbrida
+    # (ver utils/geo.py). None = remota, ou endereço que não deu pra situar.
+    # Preenchida por filtrar_vagas ANTES do score, porque descobrir o
+    # endereço pode exigir rede (a fonte só dá a cidade no card de busca) e
+    # pontuar_relevancia precisa continuar sendo função pura — é o que
+    # mantém o score testável sem tocar em serviço nenhum.
+    distancia_km: float | None = None
 
     def __post_init__(self):
         """Sobrepõe modalidade="Remoto" quando o TÍTULO contradiz (Híbrido/
@@ -1084,8 +1114,14 @@ class Job:
             if _normalizar(c) not in _FLAGS_REMOTO
         )
 
+        # Blocklist: única regra que REJEITA por presença, não por ausência
+        # (ver RegrasFiltro.termos_excluidos).
+        excluida = regras.termos_excluidos is not None and any(
+            _contem_termo(_normalizar(t), titulo_norm) for t in regras.termos_excluidos
+        )
+
         return _Avaliacao(
-            aprovada=bate_keyword and bate_cidade,
+            aprovada=bate_keyword and bate_cidade and not excluida,
             bate_forte=bate_forte,
             bate_ambiguo=bate_ambiguo,
             bate_ferramenta=bate_ferramenta,
@@ -1119,6 +1155,10 @@ class Job:
         - Idioma: 1 quando o perfil exige idioma E o título afirma isso
           explicitamente (sinal direto, não só herdado do mercado); 0 caso
           contrário.
+        - Distância (só presencial/híbrida, ver utils/geo.py): 0 dentro do
+          raio confortável declarado pelo usuário, -1 até 20 km, -2 além
+          disso. Vaga remota e endereço que não deu pra situar não
+          descontam nada.
         """
         av = self._avaliar(regras)
 
@@ -1148,9 +1188,18 @@ class Job:
 
         pontos_idioma = _PESO_IDIOMA if av.idioma_bateu_titulo else 0
 
+        if self.distancia_km is None:
+            pontos_distancia = 0
+        elif self.distancia_km <= RAIO_IDEAL_KM:
+            pontos_distancia = 0
+        elif self.distancia_km <= _LIMITE_DISTANCIA_LONGE_KM:
+            pontos_distancia = _PESO_DISTANCIA_LONGE
+        else:
+            pontos_distancia = _PESO_DISTANCIA_MUITO_LONGE
+
         return (
             pontos_cargo + pontos_ferramenta + pontos_senioridade
-            + pontos_mercado + pontos_idioma
+            + pontos_mercado + pontos_idioma + pontos_distancia
         )
 
     def motivo_aprovacao(self, regras: RegrasFiltro) -> str:

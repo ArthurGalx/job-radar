@@ -31,12 +31,37 @@ from notifier.telegram import (
     processar_feedback_pendente,
 )
 from exporters.sheets import exportar_vaga
-from scrapers.descricao_gupy import buscar_descricao
+from job import _normalizar
+from scrapers.descricao_gupy import buscar_descricao, buscar_endereco
+from utils.geo import distancia_km
 from perfis import FREQUENCIA_ALTA, PERFIS, Perfil
 from utils.filtro import filtrar_vagas
 from logger import get_logger
 
 logger = get_logger()
+
+
+def _medir_distancia(vaga) -> float | None:
+    """Distância da vaga até onde o usuário mora, pra descontar no score o
+    deslocamento (ver utils/geo.py e _PESO_DISTANCIA_* em job.py).
+
+    O card de busca só diz a cidade, e "São Paulo - SP" pode ser tanto 2 km
+    quanto 25 km de casa. Nas fontes que expõem o endereço completo na
+    página da vaga (hoje só a Gupy), vale uma requisição a mais pra medir de
+    verdade — mas só quando há deslocamento (vaga remota não desconta nada)
+    e só depois da vaga ter passado no filtro, que é o que mantém isso em
+    poucas requisições por ciclo.
+    """
+    if _normalizar(vaga.modalidade) not in ("presencial", "hibrido"):
+        return None
+
+    texto_local = vaga.local
+    if vaga.site in FONTES_COM_DESCRICAO:
+        endereco = buscar_endereco(vaga.link)
+        if endereco:
+            texto_local = endereco
+
+    return distancia_km(texto_local, vaga.modalidade)
 
 
 def _descricao_se_elegivel(vaga) -> str:
@@ -259,7 +284,7 @@ def ciclo_de_busca(perfil: Perfil):
                 continue
 
             total_brutas += len(vagas)
-            vagas_filtradas, descartes = filtrar_vagas(vagas, perfil.regras)
+            vagas_filtradas, descartes = filtrar_vagas(vagas, perfil.regras, medir_distancia=_medir_distancia)
             descartes_escopo_ciclo.update(descartes)
 
             # Eixo secundário (Ibéria, quando ligado): mesma regra de cargo,
@@ -268,7 +293,7 @@ def ciclo_de_busca(perfil: Perfil):
             vagas_secundarias = []
             if perfil.eixo_secundario_ativo and perfil.regras_eixo_secundario is not None:
                 ids_filtradas = {v.id for v in vagas_filtradas}
-                candidatas, descartes_secundario = filtrar_vagas(vagas, perfil.regras_eixo_secundario)
+                candidatas, descartes_secundario = filtrar_vagas(vagas, perfil.regras_eixo_secundario, medir_distancia=_medir_distancia)
                 descartes_escopo_ciclo.update(descartes_secundario)
                 vagas_secundarias = [v for v in candidatas if v.id not in ids_filtradas]
 

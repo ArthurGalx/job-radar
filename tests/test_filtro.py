@@ -142,12 +142,19 @@ CASOS_COMBINA_COM = [
     # região (spanish/portuguese/latam/...) — regra adicionada depois que
     # cargo remoto sem relação nenhuma com o mercado passava só por não ter
     # nada que o rejeitasse.
-    ("spanish-speaking-sem-mercado-passa", "Spanish Speaking Product Owner", "Remote", "Remoto", PERFIL_INTL, True),
+    # Era "passa" quando o perfil mirava mercado hispanofalante. Virou
+    # rejeição: o usuário fala português e inglês, e vaga que pede espanhol
+    # no título entra na blocklist (ver TERMOS_EXCLUIDOS_INTL).
+    ("spanish-speaking-agora-barrada", "Spanish Speaking Product Owner", "Remote", "Remoto", PERFIL_INTL, False),
+    ("portuguese-speaking-sem-mercado-passa", "Portuguese Speaking Product Owner", "Remote", "Remoto", PERFIL_INTL, True),
     ("product-owner-latam-passa", "Product Owner LATAM", "Remote", "Remoto", PERFIL_INTL, True),
     ("sem-idioma-sem-mercado-barrada", "Senior Product Owner", "Remote", "Remoto", PERFIL_INTL, False),
     # Mercado CONFIRMADO no texto dispensa o sinal de idioma no título — o
     # país hispanofalante já é o próprio sinal.
-    ("mercado-confirmado-dispensa-idioma-no-titulo", "Senior Product Owner", "Remote - Espanha", "Remoto", PERFIL_INTL, True),
+    # Portugal e não Espanha: mercado hispanofalante saiu de
+    # MERCADOS_REMOTO_ACEITOS_INTL junto com a virada pra inglês/português.
+    ("mercado-confirmado-dispensa-idioma-no-titulo", "Senior Product Owner", "Remote - Portugal", "Remoto", PERFIL_INTL, True),
+    ("mercado-hispanofalante-agora-barrado", "Senior Product Owner", "Remote - Espanha", "Remoto", PERFIL_INTL, False),
 
     # Perfil Brasil: cargo e cidade são checados em campos separados
     # (título vs. local) — cidade fora da lista aceita barra mesmo com
@@ -185,6 +192,14 @@ CASOS_COMBINA_COM = [
     ("remoto-chile-barrado-no-perfil-br", "Product Owner", "Remote - Chile", "Remoto", PERFIL_BR, False),
     ("remoto-brasil-passa-no-perfil-br", "Product Owner", "Remote - Brazil", "Remoto", PERFIL_BR, True),
     ("remoto-latam-passa-no-perfil-br", "Product Owner", "Remote - LATAM", "Remoto", PERFIL_BR, True),
+    # Blocklist do perfil internacional: o usuário fala português e inglês,
+    # não espanhol. Vaga que exige espanhol no título é rejeitada mesmo
+    # passando em cargo e mercado — sem isso ela entrava pelo eixo de
+    # mercado (LATAM aceito), já que o gate de idioma só olha vaga SEM
+    # mercado declarado.
+    ("exige-espanhol-barrada", "Product Owner (Spanish Speaker)", "Remote - LATAM", "Remoto", PERFIL_INTL, False),
+    ("exige-espanhol-em-espanhol-barrada", "Product Owner - Español", "Remote - LATAM", "Remoto", PERFIL_INTL, False),
+    ("portugues-continua-passando", "Product Owner - Portuguese Speaker", "Remote - LATAM", "Remoto", PERFIL_INTL, True),
     # MEDIDO ao vivo na Gupy: o card corta o nome da cidade em ~10
     # caracteres ("Santo Andr... - SP"). CIDADES tem as duas grafias por
     # causa disso — nenhuma das duas cobre a outra (borda de palavra).

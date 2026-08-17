@@ -44,6 +44,7 @@ from config_intl import (
     ATIVAR_EIXO_IBERICO,
     MERCADOS_REMOTO_ACEITOS_INTL,
     IDIOMAS_EXIGIDOS_INTL,
+    TERMOS_EXCLUIDOS_INTL,
 )
 from job import RegrasFiltro
 from scrapers.catho import CathoScraper
@@ -206,6 +207,9 @@ _REGRAS_INTL = RegrasFiltro(
     cidades=CIDADES_INTL,
     mercados_remoto_aceitos=MERCADOS_REMOTO_ACEITOS_INTL,
     idiomas_exigidos=IDIOMAS_EXIGIDOS_INTL,
+    # Blocklist: vaga que exige espanhol no título é rejeitada mesmo
+    # passando em cargo e mercado (ver TERMOS_EXCLUIDOS_INTL).
+    termos_excluidos=TERMOS_EXCLUIDOS_INTL,
 )
 
 # Eixo secundário (Ibéria): vaga presencial/híbrida em Portugal/Espanha,
