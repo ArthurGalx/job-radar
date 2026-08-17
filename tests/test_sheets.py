@@ -33,6 +33,15 @@ def _job():
     return job
 
 
+def test_nao_escreve_coluna_de_acompanhamento():
+    """O funil é registrado nas colunas que o usuário criou na planilha
+    ("Fiz inscrição?", "Respondeu?"...). O robô não pode escrever nada
+    nelas, nem recriar a `situacao` que duplicava esse papel."""
+    linha = montar_linha(_job(), "Brasil", "imediata", "Cargo forte")
+    assert "situacao" not in linha
+    assert "situacao" not in COLUNAS
+
+
 def test_montar_linha_preenche_todas_as_colunas():
     linha = montar_linha(_job(), "Brasil", "imediata", "Cargo forte")
     assert set(linha) == set(COLUNAS), "linha e COLUNAS divergiram"
@@ -45,7 +54,6 @@ def test_montar_linha_usa_dados_da_vaga():
     assert linha["relevancia"] == 7
     assert linha["senioridade"] == "Júnior"
     assert linha["canal"] == "imediata"
-    assert linha["situacao"] == "não avaliada"
 
 
 def test_montar_linha_marca_exploratoria():

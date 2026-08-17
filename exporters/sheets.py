@@ -50,18 +50,24 @@ COLUNAS = [
     "fonte",
     "publicado_em",
     "link",
-    "situacao",
+    # NÃO existe coluna de acompanhamento aqui (havia uma, `situacao`,
+    # nascendo sempre como "não avaliada"). O usuário criou as dele na
+    # própria planilha — "Fiz inscrição?", "Respondeu?", "Negou",
+    # "Aceitou?" — que são checkbox e descrevem o funil melhor do que um
+    # campo de texto livre que o robô nunca atualizava. Duas colunas pro
+    # mesmo fim, uma delas sempre com o mesmo valor, é ruído.
+    #
+    # A coluna `situacao` do BANCO continua existindo (ver
+    # _garantir_coluna_situacao em database/database.py): é herança do
+    # projeto original, também nunca usada de fato, e removê-la exigiria
+    # migração de schema sem ganho nenhum.
+
     # Só preenchida em vaga que passou do LIMIAR_CARTA numa fonte com
     # descrição disponível (ver FONTES_COM_DESCRICAO e main.py) — nas
     # outras fica vazia. É o texto do anúncio, que o card de busca não traz
     # e sem o qual não dá pra escrever candidatura personalizada.
     "descricao",
 ]
-
-# Valor inicial da coluna que VOCÊ preenche na mão (a planilha existe pra
-# isso). O robô nunca sobrescreve linha já escrita — ver dedup por link no
-# Apps Script —, então o que for anotado aqui sobrevive aos ciclos.
-_SITUACAO_INICIAL = "não avaliada"
 
 
 def montar_linha(
@@ -100,7 +106,6 @@ def montar_linha(
         "fonte": job.site,
         "publicado_em": job.publicado_em,
         "link": job.link,
-        "situacao": _SITUACAO_INICIAL,
         "descricao": descricao,
     }
 
