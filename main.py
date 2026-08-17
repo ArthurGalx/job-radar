@@ -79,6 +79,16 @@ def _descricao_se_elegivel(vaga) -> str:
     return buscar_descricao(vaga.link)
 
 
+def _perfil_ja_rodou_hoje(perfil: Perfil) -> bool:
+    """Só pra perfil marcado com uma_vez_por_dia (ver perfis.py).
+
+    A data fica em metadados (mesma tabela do heartbeat e do rodízio de
+    termos), então sobrevive entre execuções do GitHub Actions — cada run é
+    uma máquina nova. Data UTC, como o resto do projeto.
+    """
+    return obter_metadado(f"perfil_ultimo_dia_{perfil.chave}") == date.today().isoformat()
+
+
 def _fontes_baixa_frequencia_ja_rodaram_hoje(perfil: Perfil) -> bool:
     chave = f"baixa_frequencia_ultimo_dia_{perfil.chave}"
     return obter_metadado(chave) == date.today().isoformat()
@@ -209,7 +219,13 @@ def _enviar_digest_diario(perfil: Perfil):
     if se_ja_enviou_hoje:
         return
 
-    horario_certo = agora.hour == DIGEST_HORA_UTC
+    # ">=" e não "==": o GitHub Actions atrasa a execução agendada com
+    # frequência (medido: 25 min), e com poucos ciclos por dia — depois que
+    # o cron parou de rodar de madrugada — um atraso que atravesse a virada
+    # da hora faria o digest do dia inteiro ser pulado. Com ">=", o
+    # primeiro ciclo a partir da hora-alvo envia; os ciclos seguintes do
+    # mesmo dia não repetem, porque a data já ficou salva em metadados.
+    horario_certo = agora.hour >= DIGEST_HORA_UTC
     atrasado = ultimo_envio_str is not None and (
         hoje - date.fromisoformat(ultimo_envio_str)
     ).days >= 2
@@ -453,6 +469,12 @@ def _rodar_um_ciclo_de_cada(perfis: list[Perfil]):
     processar_feedback_pendente()
 
     for perfil in perfis:
+        if perfil.uma_vez_por_dia and _perfil_ja_rodou_hoje(perfil):
+            logger.info(
+                f"[{perfil.nome}] Já rodou hoje (perfil de cadência diária) — pulando neste ciclo."
+            )
+            continue
+
         print(f"\n{'=' * 50}")
         print(f"PERFIL: {perfil.nome.upper()}")
         print("=" * 50)
@@ -467,6 +489,15 @@ def _rodar_um_ciclo_de_cada(perfis: list[Perfil]):
                 print(f"• {pais}")
 
         ciclo_de_busca(perfil)
+
+        # Marca DEPOIS de rodar: se o ciclo morrer no meio (fonte travada,
+        # timeout do runner), o perfil não fica marcado como "já rodou hoje"
+        # e tenta de novo no ciclo seguinte, em vez de sumir pelo resto do
+        # dia. É o oposto da escolha feita em _construir_scrapers, onde
+        # marcar antes é o certo — lá o risco é uma fonte lenta ser
+        # retentada a cada ciclo; aqui, é o perfil inteiro não rodar.
+        if perfil.uma_vez_por_dia:
+            definir_metadado(f"perfil_ultimo_dia_{perfil.chave}", date.today().isoformat())
 
 
 def main():

@@ -399,11 +399,16 @@ INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 180))
 # Reavaliar com dado real depois de alguns dias rodando no escopo novo.
 LIMIAR_DIGEST_IMEDIATO = 6
 
-# Hora UTC em que o digest diário dispara (uma vez por perfil, por dia —
-# ver _enviar_digest_diario). 0 = meia-noite UTC = 21h em Brasília (UTC-3).
-# O cron do workflow (0 */3 * * *) já passa por essa hora exata todo dia,
-# então não precisa de agendamento à parte.
-DIGEST_HORA_UTC = 0
+# Hora UTC a partir da qual o digest diário pode disparar (uma vez por
+# perfil, por dia — ver _enviar_digest_diario). 22 = 19h em Brasília
+# (UTC-3), fim do dia útil.
+#
+# Era 0 (21h de Brasília) e QUEBROU junto com a mudança do cron: o
+# workflow deixou de rodar de madrugada, então nenhum ciclo passava mais
+# pela meia-noite UTC e o digest só sairia pelo caminho de emergência
+# ("atrasado há 2 dias"). Ao mudar o cron de novo, este valor precisa
+# apontar pra uma hora em que ainda exista ciclo agendado.
+DIGEST_HORA_UTC = 22
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
@@ -422,6 +427,69 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 # ele, qualquer um que descobrisse a URL poderia injetar linha na planilha.
 SHEETS_WEBHOOK_URL = os.getenv("SHEETS_WEBHOOK_URL", "")
 SHEETS_TOKEN = os.getenv("SHEETS_TOKEN", "")
+
+# Blocklist de idioma: título que exige uma língua que o usuário não fala é
+# REJEITADO, por mais que cargo, cidade e mercado aprovem. Ele fala
+# português (nativo) e inglês (avançado) — qualquer outra língua no título
+# significa vaga que ele não pode aceitar.
+#
+# Vale pros DOIS perfis (aqui e no internacional): vaga bilíngue de mercado
+# local existe no Brasil também ("Analista de Produto - Francês Fluente",
+# "Product Owner para cliente alemão"), não é fenômeno só de vaga de fora.
+#
+# Grafia em português, inglês e na própria língua, porque o anúncio pode
+# vir em qualquer um dos três: um anúncio brasileiro escreve "francês", um
+# internacional escreve "french", e a empresa alemã às vezes escreve
+# "Deutsch" no meio de um título em inglês. O match é por borda de palavra
+# (ver _contem_termo em job.py), então "german" não bate "germany" nem
+# "Germany-based" — o objetivo é pegar EXIGÊNCIA DE IDIOMA, não menção a
+# país.
+IDIOMAS_NAO_FALADOS = [
+    # Espanhol — o mais frequente no radar, porque LATAM e Ibéria são
+    # justamente onde o perfil internacional busca.
+    "spanish", "espanol", "español", "espanhol", "castellano", "hispanohablante",
+    # Línguas da Europa Ocidental, as mais comuns em vaga remota europeia.
+    "french", "français", "francais", "francês", "frances", "francophone",
+    "german", "deutsch", "alemão", "alemao", "allemand",
+    "italian", "italiano", "italien",
+    "dutch", "nederlands", "holandês", "holandes", "flemish", "vlaams",
+    # Nórdicas.
+    "swedish", "svenska", "sueco",
+    "norwegian", "norsk", "norueguês", "noruegues",
+    "danish", "dansk", "dinamarquês", "dinamarques",
+    "finnish", "suomi", "finlandês", "finlandes",
+    # Leste Europeu.
+    "polish", "polski", "polonês", "polones",
+    "czech", "čeština", "tcheco",
+    "slovak", "eslovaco",
+    "hungarian", "magyar", "húngaro", "hungaro",
+    "romanian", "română", "romeno",
+    "bulgarian", "búlgaro", "bulgaro",
+    "croatian", "croata",
+    "serbian", "sérvio", "servio",
+    "ukrainian", "ucraniano",
+    "russian", "русский", "russo",
+    "greek", "grego",
+    # Ásia e Oriente Médio.
+    "mandarin", "cantonese", "chinese", "chinês", "chines",
+    "japanese", "japonês", "japones", "nihongo",
+    "korean", "coreano",
+    "thai", "tailandês", "tailandes",
+    "vietnamese", "vietnamita",
+    "indonesian", "bahasa", "indonésio", "indonesio",
+    "hindi", "urdu", "bengali", "tamil",
+    "arabic", "árabe", "arabe",
+    "hebrew", "hebraico",
+    "turkish", "türkçe", "turco",
+    "farsi", "persian", "persa",
+    # Regionais da Península Ibérica — vaga em Barcelona/Bilbao/Galiza
+    # costuma exigir a língua co-oficial junto do espanhol.
+    "catalan", "català", "catalão", "catalao",
+    "basque", "euskara", "basco",
+    "galician", "galego",
+    # Africanas com presença em vaga remota europeia.
+    "afrikaans", "swahili",
+]
 
 # Vaga a partir deste score tem a DESCRIÇÃO completa buscada e guardada na
 # planilha (ver scrapers/descricao_gupy.py) — é o material pra escrever

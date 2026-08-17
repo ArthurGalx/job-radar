@@ -29,6 +29,7 @@ from config import (
     CIDADES_EUROPA_IBERICA,
     ATIVAR_EIXO_IBERICO_BR,
     MERCADOS_REMOTO_ACEITOS,
+    IDIOMAS_NAO_FALADOS,
     TERMOS_BUSCA,
     TERMOS_POR_CICLO,
 )
@@ -43,7 +44,6 @@ from config_intl import (
     CIDADES_INTL,
     ATIVAR_EIXO_IBERICO,
     MERCADOS_REMOTO_ACEITOS_INTL,
-    IDIOMAS_EXIGIDOS_INTL,
     TERMOS_EXCLUIDOS_INTL,
 )
 from job import RegrasFiltro
@@ -94,6 +94,18 @@ class Perfil:
     termos_por_ciclo: int
     definicao_scrapers: list[DefinicaoScraper]
     max_scrapers_concorrentes: int = 4
+    # True = roda no máximo UMA vez por dia, mesmo que o workflow peça o
+    # perfil em todo ciclo (ver _perfil_ja_rodou_hoje em main.py). Mesma
+    # ideia do FREQUENCIA_BAIXA das fontes, um nível acima: o foco do
+    # usuário é o mercado brasileiro, e vaga remota internacional não muda
+    # de hora em hora a ponto de justificar 6 varreduras por dia.
+    #
+    # Controlado por metadado (data do último ciclo), não pelo horário do
+    # cron: o GitHub Actions atrasa a execução agendada com frequência (já
+    # medido: 25 min), e amarrar "roda uma vez ao dia" a uma hora exata
+    # significaria pular o dia inteiro sempre que o atraso passasse da
+    # virada de hora.
+    uma_vez_por_dia: bool = False
 
 
 # Regra primária: São Paulo/Grande SP (ver CIDADES em config.py — era o
@@ -107,6 +119,10 @@ _REGRAS_BR = RegrasFiltro(
     qualificadores_cargo=QUALIFICADORES_CARGO,
     cidades=CIDADES,
     mercados_remoto_aceitos=MERCADOS_REMOTO_ACEITOS,
+    # Vaga bilíngue de mercado local existe no Brasil também ("Product
+    # Owner - Francês Fluente"), então a blocklist de idioma vale nos dois
+    # perfis, não só no internacional.
+    termos_excluidos=IDIOMAS_NAO_FALADOS,
 )
 
 # Eixo secundário (Ibéria): mesma regra de cargo, cidade europeia em vez de
@@ -206,9 +222,21 @@ _REGRAS_INTL = RegrasFiltro(
     qualificadores_cargo=[],
     cidades=CIDADES_INTL,
     mercados_remoto_aceitos=MERCADOS_REMOTO_ACEITOS_INTL,
-    idiomas_exigidos=IDIOMAS_EXIGIDOS_INTL,
-    # Blocklist: vaga que exige espanhol no título é rejeitada mesmo
-    # passando em cargo e mercado (ver TERMOS_EXCLUIDOS_INTL).
+    # idiomas_exigidos NÃO é mais usado (era IDIOMAS_EXIGIDOS_INTL). Ele
+    # existia pra garantir relação com espanhol/português quando a vaga
+    # remota não declarava mercado: sem isso, "Senior Data Analyst" remoto
+    # entrava sem nenhuma ligação com o mercado-alvo. Com o perfil virando
+    # "inglês ou português", a regra passou a barrar o que interessa —
+    # anúncio internacional é escrito em inglês por padrão e quase nunca
+    # repete a palavra "english" no título, então exigir marcador de idioma
+    # rejeitaria justamente a vaga remota global dos EUA e do Reino Unido
+    # que o usuário pediu pra priorizar.
+    #
+    # O papel dele passou pra blocklist abaixo, que é o mecanismo certo pro
+    # critério novo: em vez de exigir sinal de um idioma que a vaga não
+    # costuma declarar, rejeita quando o título exige uma língua que o
+    # usuário não fala. O filtro de MERCADO continua intacto — vaga que
+    # declara "US only" segue barrada.
     termos_excluidos=TERMOS_EXCLUIDOS_INTL,
 )
 
@@ -246,6 +274,7 @@ PERFIL_INTL = Perfil(
     termos_por_ciclo=TERMOS_POR_CICLO_INTL,
     definicao_scrapers=_SCRAPERS_INTL,
     max_scrapers_concorrentes=3,
+    uma_vez_por_dia=True,
 )
 
 PERFIS = {

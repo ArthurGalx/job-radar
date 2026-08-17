@@ -148,7 +148,17 @@ CASOS_COMBINA_COM = [
     ("spanish-speaking-agora-barrada", "Spanish Speaking Product Owner", "Remote", "Remoto", PERFIL_INTL, False),
     ("portuguese-speaking-sem-mercado-passa", "Portuguese Speaking Product Owner", "Remote", "Remoto", PERFIL_INTL, True),
     ("product-owner-latam-passa", "Product Owner LATAM", "Remote", "Remoto", PERFIL_INTL, True),
-    ("sem-idioma-sem-mercado-barrada", "Senior Product Owner", "Remote", "Remoto", PERFIL_INTL, False),
+    # Era barrada quando o perfil EXIGIA marcador de idioma no título
+    # (espanhol/português/LATAM) pra vaga remota sem mercado declarado.
+    # Passou a valer o oposto: anúncio internacional é escrito em inglês
+    # por padrão e quase nunca repete "english" no título, então exigir o
+    # marcador rejeitava justamente a vaga remota global dos EUA e do Reino
+    # Unido que o usuário pediu pra priorizar. O controle de idioma virou a
+    # blocklist (ver TERMOS_EXCLUIDOS_INTL / IDIOMAS_NAO_FALADOS).
+    ("remota-global-sem-mercado-agora-passa", "Senior Product Owner", "Remote", "Remoto", PERFIL_INTL, True),
+    # O filtro de MERCADO continua intacto: vaga que declara escopo fechado
+    # em país onde ele não pode trabalhar segue barrada.
+    ("us-only-continua-barrada", "Product Owner", "Remote — US only", "Remoto", PERFIL_INTL, False),
     # Mercado CONFIRMADO no texto dispensa o sinal de idioma no título — o
     # país hispanofalante já é o próprio sinal.
     # Portugal e não Espanha: mercado hispanofalante saiu de
@@ -203,6 +213,19 @@ CASOS_COMBINA_COM = [
     # mercado (LATAM aceito), já que o gate de idioma só olha vaga SEM
     # mercado declarado.
     ("exige-espanhol-barrada", "Product Owner (Spanish Speaker)", "Remote - LATAM", "Remoto", PERFIL_INTL, False),
+    # A blocklist cobre TODA língua fora de português e inglês, não só
+    # espanhol — francês, alemão, holandês e nórdicas aparecem bastante em
+    # vaga remota europeia.
+    ("exige-frances-barrada", "Product Owner - French Speaking", "Remote - LATAM", "Remoto", PERFIL_INTL, False),
+    ("exige-alemao-barrada", "Product Owner (German C1)", "Remote - LATAM", "Remoto", PERFIL_INTL, False),
+    ("exige-holandes-barrada", "Product Owner - Dutch Native", "Remote - LATAM", "Remoto", PERFIL_INTL, False),
+    # A blocklist vale no perfil BRASIL também: vaga bilíngue de mercado
+    # local existe aqui ("Product Owner - Francês Fluente").
+    ("exige-frances-barrada-no-br", "Product Owner - Francês Fluente", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    ("exige-japones-barrada-no-br", "Product Owner (Japonês)", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    # Menção a PAÍS não é exigência de idioma: o match é por borda de
+    # palavra, então "german" não bate "Germany".
+    ("pais-no-titulo-nao-e-idioma", "Product Owner - Germany Team", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     ("exige-espanhol-em-espanhol-barrada", "Product Owner - Español", "Remote - LATAM", "Remoto", PERFIL_INTL, False),
     ("portugues-continua-passando", "Product Owner - Portuguese Speaker", "Remote - LATAM", "Remoto", PERFIL_INTL, True),
     # MEDIDO ao vivo na Gupy: o card corta o nome da cidade em ~10

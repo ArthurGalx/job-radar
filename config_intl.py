@@ -11,7 +11,13 @@
 # principal (reaproveita o bot já configurado, e o dedup por link no mesmo
 # jobs.db não tem risco de colisão — o id é hash do link, e vaga
 # internacional nunca vai ter o mesmo link de uma vaga brasileira).
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DB_PATH, CIDADES_EUROPA_IBERICA  # noqa: F401
+from config import (  # noqa: F401
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID,
+    DB_PATH,
+    CIDADES_EUROPA_IBERICA,
+    IDIOMAS_NAO_FALADOS,
+)
 
 # Cargo em inglês e português — os dois idiomas em que o anúncio pode vir e
 # que o usuário lê.
@@ -188,13 +194,13 @@ IDIOMAS_EXIGIDOS_INTL = [
 # resto. Sem isso, "Product Owner (Spanish Speaker) - Remote LATAM"
 # continuaria entrando pelo eixo de mercado (LATAM aceito), já que o gate
 # de idioma só olha vaga sem mercado declarado.
-TERMOS_EXCLUIDOS_INTL = [
-    "spanish",
-    "español",
-    "espanol",
-    "hispanohablante",
-    "castellano",
-]
+# Blocklist do perfil internacional = a lista compartilhada de idiomas que
+# o usuário não fala (ver IDIOMAS_NAO_FALADOS em config.py). Era uma lista
+# própria só com espanhol; virou referência à lista comum quando ficou
+# claro que o problema não era espanhol especificamente, e sim qualquer
+# língua fora de português e inglês — francês, alemão, holandês e nórdicas
+# aparecem bastante em vaga remota europeia.
+TERMOS_EXCLUIDOS_INTL = IDIOMAS_NAO_FALADOS
 
 # Rodízio de termos, mesmo mecanismo do TERMOS_POR_CICLO em config.py (ver
 # _proximo_bloco_termos em main.py) — só que com chave de metadados própria
@@ -232,6 +238,19 @@ TERMOS_POR_CICLO_INTL = 10
 # WeWorkRemotely (agregador global de vaga remota, ver perfis.py) e pelos
 # termos com "latam"/"brazil remote", que não dependem de location.
 LOCATIONS_INTL = [
+    # Ordem = prioridade declarada pelo usuário: prefere EUA e Inglaterra a
+    # Portugal. O LinkedIn busca location por location, então a ordem
+    # também decide quem entra primeiro quando o ciclo é interrompido.
+    #
+    # EUA e Reino Unido tinham sido REMOVIDOS pela autora original porque
+    # "a maioria das vagas pede inglês fluente" — o que era problema pra
+    # ela e não é pra este usuário (inglês avançado). O que continua
+    # valendo é o filtro de MERCADO: vaga "Remote - US only" segue sendo
+    # rejeitada, porque morar no Brasil não muda com o idioma. O que entra
+    # de lá é vaga globalmente remota ou que aceita LATAM/Brasil
+    # explicitamente.
+    "United States",
+    "United Kingdom",
     "Portugal",
 ]
 
@@ -316,7 +335,9 @@ ATIVAR_EIXO_IBERICO = False
 # bloquear acesso automatizado (principalmente de IP de nuvem/datacenter),
 # mesmo funcionando em teste manual.
 DOMINIOS_INDEED_INTL = {
-    # Só Portugal, mesmo motivo do LOCATIONS_INTL acima: domínio de país
-    # hispanofalante devolve vaga do mercado local, em espanhol.
+    # Mesma prioridade do LOCATIONS_INTL acima. Domínio de país
+    # hispanofalante saiu: devolve vaga do mercado local, em espanhol.
+    "Estados Unidos": "www.indeed.com",
+    "Reino Unido": "uk.indeed.com",
     "Portugal": "pt.indeed.com",
 }

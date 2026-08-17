@@ -2,7 +2,14 @@ name: JobRadar
 
 on:
   schedule:
-    - cron: "0 */3 * * *"
+    # Horário de BRASÍLIA (UTC-3), nunca de madrugada: 07h, 10h, 13h, 16h,
+    # 19h e 22h. O cron antigo ("0 */3 * * *") caía às 00h, 03h e 06h da
+    # manhã — a notificação chegava no celular no meio da noite, e vaga
+    # publicada de madrugada continua lá às 7h.
+    #
+    # 22:00 UTC = 19h de Brasília é o ciclo que dispara o digest diário
+    # (ver DIGEST_HORA_UTC em config.py). Se mexer nesta lista, confira lá.
+    - cron: "0 10,13,16,19,22,1 * * *"
   # Disparo manual aceita escolher o perfil. O cron continua rodando os
   # dois, como sempre — isso existe pro caso de querer medir volume ou
   # testar uma mudança de config sem soltar o pipeline inteiro de uma vez
