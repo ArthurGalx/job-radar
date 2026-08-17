@@ -11,8 +11,8 @@ on:
     # - DIGEST_HORA_UTC (config.py) precisa apontar pra uma hora em que
     #   ainda exista ciclo agendado, senão o digest diário nunca sai. Hoje
     #   quem dispara é o ciclo das 20h (23:00 UTC).
-    # - o perfil internacional roda uma vez por dia, no primeiro ciclo do
-    #   dia em Brasília (ver uma_vez_por_dia em perfis.py) — hoje o das 08h.
+    # - o perfil internacional está DESLIGADO no automático (ver PERFIS
+    #   abaixo), então nenhum ciclo do cron traz vaga de fora.
     - cron: "0 11,14,17,20,23,2 * * *"
   # Disparo manual aceita escolher o perfil. O cron continua rodando os
   # dois, como sempre — isso existe pro caso de querer medir volume ou
@@ -25,10 +25,10 @@ on:
       perfis:
         description: "Perfis a rodar neste disparo"
         type: choice
-        default: "brasil internacional"
+        default: "brasil"
         options:
-          - "brasil internacional"
           - "brasil"
+          - "brasil internacional"
           - "internacional"
 
 concurrency:
@@ -76,9 +76,14 @@ jobs:
           # Via env, não interpolado direto no `run` abaixo: expressão do
           # GitHub dentro do script vira injeção de comando se o valor não
           # for confiável. `type: choice` já limita as opções, mas o padrão
-          # seguro não custa nada. Vazio (agendamento por cron) cai no
-          # default de rodar os dois perfis.
-          PERFIS: ${{ github.event.inputs.perfis || 'brasil internacional' }}
+          # seguro não custa nada.
+          #
+          # O cron roda SÓ O BRASIL desde que o usuário informou não ter
+          # autorização de trabalho nos EUA nem no Reino Unido — sem isso, o
+          # perfil internacional entregaria justamente a vaga que ele não
+          # pode aceitar. O perfil continua existindo e selecionável no
+          # disparo manual (ver perfis.py), pra caso a situação mude.
+          PERFIS: ${{ github.event.inputs.perfis || 'brasil' }}
           # Disparo manual ignora a cadência diária: quem apertou o botão
           # está pedindo aquele perfil AGORA, e a cadência existe pra
           # controlar o automático (ver uma_vez_por_dia em perfis.py). No

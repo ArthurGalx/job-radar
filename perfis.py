@@ -261,6 +261,16 @@ _SCRAPERS_INTL = [
     DefinicaoScraper(WeWorkRemotelyIntlScraper, FREQUENCIA_ALTA),
 ]
 
+# DESLIGADO no automático: o cron roda só o perfil Brasil (ver PERFIS no
+# .github/workflows/jobradar.yml). O usuário não tem autorização de
+# trabalho nos EUA nem no Reino Unido, que eram os dois mercados que ele
+# tinha pedido pra priorizar aqui — sem isso, este perfil entrega
+# principalmente vaga que ele não pode aceitar.
+#
+# Nada foi apagado: o perfil continua completo e selecionável no disparo
+# manual do workflow. Vaga REMOTA de empresa de fora que contrata no Brasil
+# não se perde com isso — ela chega pelo perfil BRASIL, que aceita mercado
+# "Brasil"/"LATAM" e já inclui o WeWorkRemotely entre as fontes.
 PERFIL_INTL = Perfil(
     chave="internacional",
     nome="Internacional",
