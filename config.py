@@ -400,8 +400,9 @@ INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 180))
 LIMIAR_DIGEST_IMEDIATO = 6
 
 # Hora UTC a partir da qual o digest diário pode disparar (uma vez por
-# perfil, por dia — ver _enviar_digest_diario). 22 = 19h em Brasília
-# (UTC-3), fim do dia útil.
+# perfil, por dia — ver _enviar_digest_diario). Quem dispara de fato é o
+# ciclo das 20h de Brasília (23:00 UTC); o valor fica uma hora antes de
+# propósito, como folga pro atraso do GitHub Actions.
 #
 # Era 0 (21h de Brasília) e QUEBROU junto com a mudança do cron: o
 # workflow deixou de rodar de madrugada, então nenhum ciclo passava mais

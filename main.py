@@ -4,7 +4,7 @@ import sys
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from config import (
     DIGEST_HORA_UTC,
@@ -79,14 +79,32 @@ def _descricao_se_elegivel(vaga) -> str:
     return buscar_descricao(vaga.link)
 
 
+# O projeto inteiro trabalha em UTC (o runner do GitHub Actions roda em
+# UTC), e isso está certo pra tudo que é interno — dedup, offset de rodízio,
+# heartbeat. A cadência "uma vez por dia" é a exceção: ela é uma promessa
+# feita ao USUÁRIO, que vive em Brasília, então o "dia" tem que ser o dele.
+#
+# MEDIDO na prática: com a janela de execução das 08h às 23h de Brasília
+# (11:00-02:00 UTC), o primeiro ciclo de cada dia UTC é o das 02:00 UTC —
+# ou seja, o das 23h da noite anterior em Brasília. Em dia UTC, o perfil
+# internacional cairia sempre no ciclo da noite; em dia local, cai no
+# primeiro da manhã, que é o que "uma vez por dia" quer dizer pra quem lê
+# a notificação.
+_FUSO_BRASILIA = timezone(timedelta(hours=-3))
+
+
+def _data_local() -> date:
+    return datetime.now(_FUSO_BRASILIA).date()
+
+
 def _perfil_ja_rodou_hoje(perfil: Perfil) -> bool:
     """Só pra perfil marcado com uma_vez_por_dia (ver perfis.py).
 
     A data fica em metadados (mesma tabela do heartbeat e do rodízio de
     termos), então sobrevive entre execuções do GitHub Actions — cada run é
-    uma máquina nova. Data UTC, como o resto do projeto.
+    uma máquina nova.
     """
-    return obter_metadado(f"perfil_ultimo_dia_{perfil.chave}") == date.today().isoformat()
+    return obter_metadado(f"perfil_ultimo_dia_{perfil.chave}") == _data_local().isoformat()
 
 
 def _fontes_baixa_frequencia_ja_rodaram_hoje(perfil: Perfil) -> bool:
@@ -497,7 +515,7 @@ def _rodar_um_ciclo_de_cada(perfis: list[Perfil]):
         # marcar antes é o certo — lá o risco é uma fonte lenta ser
         # retentada a cada ciclo; aqui, é o perfil inteiro não rodar.
         if perfil.uma_vez_por_dia:
-            definir_metadado(f"perfil_ultimo_dia_{perfil.chave}", date.today().isoformat())
+            definir_metadado(f"perfil_ultimo_dia_{perfil.chave}", _data_local().isoformat())
 
 
 def main():
