@@ -298,6 +298,14 @@ MERCADOS_REMOTO_ACEITOS_INTL = [
     # anunciada pra região inteira costuma ser de empresa que opera em
     # inglês — diferente de vaga de um país hispanofalante específico.
     "LATAM",
+    # EUA e Reino Unido ENTRAM a pedido explícito do usuário, que quer ver
+    # essas vagas. Eles estavam fora de propósito: "Remote — US only" é
+    # vaga que exige autorização de trabalho local, e morar no Brasil não
+    # muda com o idioma. Continuam sendo a aposta mais incerta da lista —
+    # boa parte vai ser inalcançável sem visto —, mas quem decide o que
+    # vale tentar é ele, não o filtro. Tirar de novo é apagar duas linhas.
+    "Estados Unidos",
+    "Reino Unido",
 ]
 
 # Eixo separado pra isso, controlado por ATIVAR_EIXO_IBERICO — dá pra

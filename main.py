@@ -479,7 +479,7 @@ def ciclo_de_busca(perfil: Perfil):
     _enviar_digest_diario(perfil)
 
 
-def _rodar_um_ciclo_de_cada(perfis: list[Perfil]):
+def _rodar_um_ciclo_de_cada(perfis: list[Perfil], ignorar_cadencia: bool = False):
     # Uma vez por execução, não por perfil: o offset do getUpdates (ver
     # processar_feedback_pendente) é global — feedback de vaga não tem
     # perfil, e rodar duas vezes na mesma execução só gastaria uma chamada
@@ -487,7 +487,7 @@ def _rodar_um_ciclo_de_cada(perfis: list[Perfil]):
     processar_feedback_pendente()
 
     for perfil in perfis:
-        if perfil.uma_vez_por_dia and _perfil_ja_rodou_hoje(perfil):
+        if perfil.uma_vez_por_dia and not ignorar_cadencia and _perfil_ja_rodou_hoje(perfil):
             logger.info(
                 f"[{perfil.nome}] Já rodou hoje (perfil de cadência diária) — pulando neste ciclo."
             )
@@ -531,6 +531,14 @@ def main():
         ),
     )
     parser.add_argument(
+        "--ignorar-cadencia-diaria",
+        action="store_true",
+        help="Roda também os perfis marcados com uma_vez_por_dia mesmo que já tenham "
+             "rodado hoje (ver perfis.py). Usado no disparo MANUAL do workflow: quem "
+             "aperta o botão está pedindo aquele perfil agora, e a cadência existe pra "
+             "controlar o automático, não pra impedir o pedido explícito.",
+    )
+    parser.add_argument(
         "--once",
         action="store_true",
         help="Roda um único ciclo de busca (de cada perfil selecionado) e encerra "
@@ -559,11 +567,11 @@ def main():
         sys.exit(1)
 
     if args.once:
-        _rodar_um_ciclo_de_cada(perfis_selecionados)
+        _rodar_um_ciclo_de_cada(perfis_selecionados, args.ignorar_cadencia_diaria)
         return
 
     while True:
-        _rodar_um_ciclo_de_cada(perfis_selecionados)
+        _rodar_um_ciclo_de_cada(perfis_selecionados, args.ignorar_cadencia_diaria)
         logger.info(f"Aguardando {INTERVALO_MINUTOS} minutos até a próxima checagem...")
         time.sleep(INTERVALO_MINUTOS * 60)
 

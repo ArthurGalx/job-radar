@@ -79,6 +79,11 @@ jobs:
           # seguro não custa nada. Vazio (agendamento por cron) cai no
           # default de rodar os dois perfis.
           PERFIS: ${{ github.event.inputs.perfis || 'brasil internacional' }}
+          # Disparo manual ignora a cadência diária: quem apertou o botão
+          # está pedindo aquele perfil AGORA, e a cadência existe pra
+          # controlar o automático (ver uma_vez_por_dia em perfis.py). No
+          # cron fica vazio, e a cadência vale normalmente.
+          EXTRA: ${{ github.event_name == 'workflow_dispatch' && '--ignorar-cadencia-diaria' || '' }}
         # Antes disso só o perfil Brasil rodava aqui — main_intl.py existia
         # no repositório mas nunca foi chamado pelo workflow, então o
         # pipeline internacional nunca rodou de verdade em produção. Agora é
@@ -86,7 +91,7 @@ jobs:
         # dois rodam na mesma execução/commit, um após o outro.
         # $PERFIS sem aspas de propósito: precisa quebrar em dois
         # argumentos quando são dois perfis (--perfil brasil internacional).
-        run: python main.py --perfil $PERFIS --once
+        run: python main.py --perfil $PERFIS --once $EXTRA
 
       - name: Salvar vagas já vistas (evita notificação duplicada)
         run: |

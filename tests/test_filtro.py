@@ -156,9 +156,17 @@ CASOS_COMBINA_COM = [
     # Unido que o usuário pediu pra priorizar. O controle de idioma virou a
     # blocklist (ver TERMOS_EXCLUIDOS_INTL / IDIOMAS_NAO_FALADOS).
     ("remota-global-sem-mercado-agora-passa", "Senior Product Owner", "Remote", "Remoto", PERFIL_INTL, True),
-    # O filtro de MERCADO continua intacto: vaga que declara escopo fechado
-    # em país onde ele não pode trabalhar segue barrada.
-    ("us-only-continua-barrada", "Product Owner", "Remote — US only", "Remoto", PERFIL_INTL, False),
+    # EUA e Reino Unido foram ACEITOS a pedido explícito do usuário — ele
+    # quer ver essas vagas, mesmo sabendo que boa parte exige autorização de
+    # trabalho local. Este caso era o oposto ("us-only-continua-barrada")
+    # até então.
+    ("us-only-agora-passa", "Product Owner", "Remote — US only", "Remoto", PERFIL_INTL, True),
+    ("uk-passa", "Product Owner", "Remote - United Kingdom", "Remoto", PERFIL_INTL, True),
+    # O mercado continua sendo allowlist: país que não está na lista segue
+    # barrado, e a blocklist de idioma continua valendo por cima do
+    # mercado aceito.
+    ("india-continua-barrada", "Product Owner", "Remote - India", "Remoto", PERFIL_INTL, False),
+    ("us-only-com-espanhol-barrada", "Product Owner (Spanish Speaker)", "Remote — US only", "Remoto", PERFIL_INTL, False),
     # Mercado CONFIRMADO no texto dispensa o sinal de idioma no título — o
     # país hispanofalante já é o próprio sinal.
     # Portugal e não Espanha: mercado hispanofalante saiu de
