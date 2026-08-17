@@ -33,7 +33,7 @@ from exporters.sheets import exportar_vaga
 from job import _normalizar
 from scrapers.descricao_gupy import buscar_descricao as descricao_gupy, buscar_endereco
 from scrapers.descricao_solides import buscar_descricao as descricao_solides
-from utils.geo import distancia_km
+from utils.geo import distancia_de_coordenadas, distancia_km
 from perfis import FREQUENCIA_ALTA, PERFIS, Perfil
 from utils.filtro import filtrar_vagas
 from logger import get_logger
@@ -52,7 +52,19 @@ def _medir_distancia(vaga) -> float | None:
     e só depois da vaga ter passado no filtro, que é o que mantém isso em
     poucas requisições por ciclo.
     """
-    if _normalizar(vaga.modalidade) not in ("presencial", "hibrido"):
+    modalidade = _normalizar(vaga.modalidade)
+    if modalidade in ("remoto", "remota", "remote"):
+        return None
+
+    # Coordenada publicada pela fonte vence qualquer estimativa (hoje só o
+    # InfoJobs publica — ver Job.coordenadas). Ela também RESOLVE o caso da
+    # modalidade não declarada: vaga com endereço físico publicado exige
+    # deslocamento, disse ela isso ou não. Sem coordenada, modalidade
+    # desconhecida continua sem medição — não dá pra inventar.
+    if vaga.coordenadas is not None:
+        return distancia_de_coordenadas(vaga.coordenadas)
+
+    if modalidade not in ("presencial", "hibrido"):
         return None
 
     texto_local = vaga.local

@@ -55,6 +55,7 @@ from scrapers.catho import CathoScraper
 from scrapers.geekhunter import GeekHunterScraper
 from scrapers.gupy import GupyScraper
 from scrapers.indeed import IndeedScraper
+from scrapers.infojobs import InfoJobsScraper
 from scrapers.indeed_intl import IndeedIntlScraper
 from scrapers.jobs99 import Jobs99Scraper
 from scrapers.linkedin import LinkedInScraper
@@ -197,6 +198,11 @@ _SCRAPERS_BR = [
     DefinicaoScraper(GupyScraper, FREQUENCIA_ALTA),        # ~2,6% de rendimento
     DefinicaoScraper(LinkedInScraper, FREQUENCIA_ALTA),     # ~8,5% — a melhor fonte de longe
     DefinicaoScraper(SolidesScraper, FREQUENCIA_ALTA),      # ~1,1%
+    # InfoJobs: HTML renderizado no servidor (uma requisição por termo, sem
+    # navegador) e o card mais rico do projeto — traz coordenada da vaga,
+    # modalidade, faixa de experiência e resumo do anúncio. Ver
+    # scrapers/infojobs.py.
+    DefinicaoScraper(InfoJobsScraper, FREQUENCIA_ALTA),
     DefinicaoScraper(IndeedScraper, FREQUENCIA_ALTA),       # ~1,1%
     DefinicaoScraper(CathoScraper, FREQUENCIA_BAIXA),       # <1%, timeout frequente em headless
     DefinicaoScraper(GeekHunterScraper, FREQUENCIA_BAIXA),  # <1%

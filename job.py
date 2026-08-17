@@ -948,6 +948,11 @@ class Job:
     # ele o score só tinha o título pra ler — que em vaga de produto é
     # quase sempre "Product Owner" e nada mais.
     descricao: str = ""
+    # Latitude/longitude da vaga, quando a fonte publica (hoje só o
+    # InfoJobs, que põe no próprio card). Vale mais que qualquer
+    # estimativa: as outras fontes obrigam a deduzir a posição de um CEP
+    # ou do centro da cidade (ver utils/geo.py), com erro de 1 a 3 km.
+    coordenadas: tuple[float, float] | None = None
     # Distância em km até onde o usuário mora, pra vaga presencial/híbrida
     # (ver utils/geo.py). None = remota, ou endereço que não deu pra situar.
     # Preenchida por filtrar_vagas ANTES do score, porque descobrir o

@@ -122,6 +122,13 @@ def _coordenadas_por_cidade(texto: str) -> tuple[float, float] | None:
     return None
 
 
+def distancia_de_coordenadas(coordenadas: tuple[float, float]) -> float:
+    """Distância exata, quando a fonte publica a posição da vaga (ver
+    Job.coordenadas). Não passa por tabela nenhuma — é o caminho preciso,
+    e o resto deste módulo existe só pras fontes que não dão isso."""
+    return round(_haversine(_ANCORA, coordenadas), 1)
+
+
 def distancia_km(texto_local: str, modalidade: str) -> float | None:
     """Distância entre a vaga e a âncora, em km. None quando não se aplica
     (vaga remota) ou quando não dá pra situar o endereço.
