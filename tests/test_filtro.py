@@ -337,3 +337,93 @@ def test_publicacao_antiga(nome, publicado_em, esperado):
         publicado_em=publicado_em,
     )
     assert job.publicacao_antiga == esperado
+
+
+# ---------------------------------------------------------------------------
+# Afinidade e barreira (job.py) — os dois eixos que leem a DESCRIÇÃO.
+#
+# MEDIDO nas 10 vagas reais que o usuário mandou analisar: ágil, backlog e
+# comunicação com stakeholders aparecem em 8-10 delas, então não separam
+# nada; o que separa é integração/API, automação, IA, dados próprios,
+# discovery e métrica de experiência. Antes destes eixos, quase toda vaga
+# aprovada empatava em 6 e o 10 era inalcançável.
+# ---------------------------------------------------------------------------
+
+def _vaga_com_descricao(descricao: str) -> Job:
+    job = Job(
+        titulo="Product Owner Pleno", empresa="Teste", local="São Paulo - SP",
+        link="https://teste.invalido/afinidade", site="Gupy", modalidade="Híbrido",
+    )
+    job.descricao = descricao
+    job.distancia_km = 5.0
+    return job
+
+
+def test_afinidade_conta_grupos_distintos():
+    pontos, grupos = _vaga_com_descricao(
+        "Buscamos alguém com experiência em APIs e integrações, "
+        "automação de processos e análise em Power BI."
+    ).afinidade()
+    assert pontos == 3
+    assert set(grupos) == {"integracao", "automacao", "dados"}
+
+
+def test_afinidade_tem_teto():
+    """Vaga que cita tudo não pode estourar a escala."""
+    pontos, grupos = _vaga_com_descricao(
+        "IA generativa, automação, APIs, SQL, discovery e NPS."
+    ).afinidade()
+    assert len(grupos) > 3
+    assert pontos == 3
+
+
+def test_agil_e_backlog_nao_contam_como_afinidade():
+    """Aparecem em 9 de 10 vagas — pontuar isso é o que achatava tudo em 6."""
+    pontos, grupos = _vaga_com_descricao(
+        "Scrum, Kanban, gestão de backlog, histórias de usuário e critérios de aceite."
+    ).afinidade()
+    assert pontos == 0 and grupos == []
+
+
+def test_sem_descricao_afinidade_zero():
+    """Fonte que não expõe descrição (LinkedIn) não é penalizada — só não
+    ganha o bônus, o que é limitação do eixo, não julgamento da vaga."""
+    job = Job(titulo="Product Owner", empresa="T", local="São Paulo - SP",
+              link="https://teste.invalido/sem", site="LinkedIn", modalidade="Híbrido")
+    assert job.afinidade() == (0, [])
+
+
+def test_barreira_anos_altos():
+    pontos, motivos = _vaga_com_descricao("Exigimos 5 anos de experiência como PO.").barreira()
+    assert pontos == -2 and motivos == ["pede 5+ anos"]
+
+
+def test_barreira_ignora_anos_dentro_do_alcance():
+    """2 a 4 anos é a faixa que ele consegue disputar — não desconta."""
+    pontos, motivos = _vaga_com_descricao("De 2 a 3 anos de experiência.").barreira()
+    assert pontos == 0 and motivos == []
+
+
+def test_barreira_certificacao():
+    pontos, motivos = _vaga_com_descricao("Diferencial: certificação PSPO I.").barreira()
+    assert pontos == -1 and motivos == ["pede certificação"]
+
+
+def test_safe_nao_conta_como_certificacao():
+    """MEDIDO na vaga real da Gauge: "Metodologias Ágeis (Scrum, Kanban,
+    SAFe, Lean)" é menção a framework, não exigência de certificado."""
+    pontos, _ = _vaga_com_descricao("Metodologias Ágeis (Scrum, Kanban, SAFe, Lean).").barreira()
+    assert pontos == 0
+
+
+def test_score_chega_a_dez():
+    """O teto virou alcançável: cargo forte 3 + pleno 2 + local 2 + afinidade 3."""
+    vaga = _vaga_com_descricao("Integrações via API, automação de processos e dashboards em Looker.")
+    assert vaga.pontuar_relevancia(PERFIL_BR.regras) == 10
+
+
+def test_score_nunca_negativo():
+    vaga = _vaga_com_descricao("Exigimos 8 anos de experiência e certificação PSPO.")
+    vaga.titulo = "Product Owner Sênior"
+    vaga.distancia_km = 40.0
+    assert vaga.pontuar_relevancia(PERFIL_BR.regras) == 0

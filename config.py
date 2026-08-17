@@ -492,23 +492,21 @@ IDIOMAS_NAO_FALADOS = [
     "afrikaans", "swahili",
 ]
 
-# Vaga a partir deste score tem a DESCRIÇÃO completa buscada e guardada na
-# planilha (ver scrapers/descricao_gupy.py) — é o material pra escrever
-# candidatura personalizada, que o card de busca não traz.
+# Fontes cuja página individual entrega a descrição sem navegador (JSON
+# embutido no HTML — ver scrapers/descricao_comum.py). A descrição é o que
+# alimenta os eixos de afinidade e barreira do score (ver
+# pontuar_relevancia em job.py); sem ela, o score volta a depender só do
+# título, que em vaga de produto quase não diz nada.
 #
-# 7 e não 8: o pedido original era "nota maior que 7", mas 7 é o teto
-# prático do score no escopo de produto (cargo forte 3 + senioridade alvo 2
-# + mercado 2 = 7; o eixo de ferramenta, que somaria +2, quase nunca bate em
-# título de produto). MEDIDO: zero vaga acima de 7 no banco desde a virada
-# de escopo, contra 3 vagas Gupy em 7 num único ciclo — com "> 7" o recurso
-# nunca dispararia.
-LIMIAR_CARTA = 7
-
-# Só a Gupy por enquanto: a página individual dela entrega os dados num
-# JSON dentro do HTML (sem navegador, GET simples). LinkedIn exige sessão e
-# tem anti-bot agressivo na página da vaga; Sólides e os outros portais
-# ainda não foram investigados. Conjunto (não lista) porque o uso é só
-# teste de pertinência, e o valor bate com Job.site.
-FONTES_COM_DESCRICAO = {"Gupy"}
+# Buscada pra TODA vaga aprovada dessas fontes, não só pras de score alto:
+# são ~15 requisições por ciclo, em cima das centenas que a busca já faz, e
+# sem isso o eixo de afinidade não teria o que ler no momento em que o
+# score é calculado. O valor bate com Job.site.
+#
+# LinkedIn ficou de fora: a página da vaga lá exige sessão e tem anti-bot
+# agressivo — encareceria o ciclo e arriscaria bloqueio da fonte que mais
+# rende. Vaga de lá fica sem afinidade, o que é limitação conhecida do
+# eixo, não julgamento sobre a vaga.
+FONTES_COM_DESCRICAO = {"Gupy", "Solides"}
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "jobs.db")

@@ -8,7 +8,7 @@ O HTML dos casos abaixo é o formato real devolvido pela Gupy (conferido na
 vaga "Product Owner Pleno - Be.Aliant", que motivou o módulo).
 """
 
-from scrapers import descricao_gupy
+from scrapers import descricao_comum
 from scrapers.descricao_gupy import MAX_CARACTERES, buscar_descricao, montar_texto
 
 
@@ -53,23 +53,28 @@ def test_vaga_sem_campo_nenhum_devolve_vazio():
 
 
 def test_falha_de_rede_devolve_vazio(monkeypatch):
-    """Best-effort: isso roda depois da vaga já estar notificada e salva
-    (ver main.py), então falha não pode levantar exceção."""
-    def _falha(*args, **kwargs):
-        raise descricao_gupy.requests.ConnectionError("sem rede")
+    """Best-effort: a busca de descrição roda dentro do ciclo e não pode
+    levantar exceção — sem descrição, a vaga só perde os eixos que dependem
+    dela (afinidade e barreira, ver job.py)."""
+    descricao_comum._CACHE.clear()
 
-    monkeypatch.setattr(descricao_gupy.requests, "get", _falha)
+    def _falha(*args, **kwargs):
+        raise descricao_comum.requests.ConnectionError("sem rede")
+
+    monkeypatch.setattr(descricao_comum.requests, "get", _falha)
     assert buscar_descricao("https://exemplo.invalido/job/1") == ""
 
 
 def test_pagina_sem_next_data_devolve_vazio(monkeypatch):
     """Se a Gupy mudar o layout, o módulo degrada pra vazio em vez de
     quebrar o ciclo."""
+    descricao_comum._CACHE.clear()
+
     class _Resposta:
         text = "<html><body>página diferente</body></html>"
 
         def raise_for_status(self):
             return None
 
-    monkeypatch.setattr(descricao_gupy.requests, "get", lambda *a, **k: _Resposta())
-    assert buscar_descricao("https://exemplo.invalido/job/1") == ""
+    monkeypatch.setattr(descricao_comum.requests, "get", lambda *a, **k: _Resposta())
+    assert buscar_descricao("https://exemplo.invalido/job/2") == ""

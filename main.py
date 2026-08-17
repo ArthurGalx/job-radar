@@ -10,7 +10,6 @@ from config import (
     DIGEST_HORA_UTC,
     FONTES_COM_DESCRICAO,
     INTERVALO_MINUTOS,
-    LIMIAR_CARTA,
     LIMIAR_DIGEST_IMEDIATO,
 )
 from database.database import (
@@ -32,7 +31,8 @@ from notifier.telegram import (
 )
 from exporters.sheets import exportar_vaga
 from job import _normalizar
-from scrapers.descricao_gupy import buscar_descricao, buscar_endereco
+from scrapers.descricao_gupy import buscar_descricao as descricao_gupy, buscar_endereco
+from scrapers.descricao_solides import buscar_descricao as descricao_solides
 from utils.geo import distancia_km
 from perfis import FREQUENCIA_ALTA, PERFIS, Perfil
 from utils.filtro import filtrar_vagas
@@ -64,19 +64,28 @@ def _medir_distancia(vaga) -> float | None:
     return distancia_km(texto_local, vaga.modalidade)
 
 
-def _descricao_se_elegivel(vaga) -> str:
-    """Texto do anúncio, só pra vaga que vale carta escrita à mão.
+# Cada fonte guarda a descrição num lugar diferente do JSON da página;
+# quem sabe disso é o módulo dela (ver scrapers/descricao_*.py). Aqui só
+# se escolhe qual chamar.
+_BUSCADORES_DESCRICAO = {
+    "Gupy": descricao_gupy,
+    "Solides": descricao_solides,
+}
 
-    Duas condições (ver LIMIAR_CARTA e FONTES_COM_DESCRICAO em config.py):
-    score alto o bastante e fonte cuja página individual dá pra ler sem
-    navegador. As duas juntas mantêm isso em ~1-3 requisições por ciclo, em
-    cima das centenas que a busca já faz — buscar descrição de toda vaga
-    aprovada multiplicaria o custo do ciclo sem uso pra 95% delas.
+
+def _enriquecer_vaga(vaga) -> None:
+    """Preenche descrição e distância ANTES do score (ver filtrar_vagas).
+
+    Roda só nas vagas que já passaram no filtro — algo entre 10 e 20 por
+    ciclo, contra as centenas de páginas que a busca abre. É o que permite
+    pontuar_relevancia continuar sendo função pura: quando ela roda, tudo
+    que precisa de rede já está no objeto.
     """
-    if vaga.site not in FONTES_COM_DESCRICAO or vaga.relevancia < LIMIAR_CARTA:
-        return ""
-    logger.info(f"Buscando descrição completa (score {vaga.relevancia}): {vaga.titulo}")
-    return buscar_descricao(vaga.link)
+    buscador = _BUSCADORES_DESCRICAO.get(vaga.site)
+    if buscador is not None:
+        vaga.descricao = buscador(vaga.link)
+
+    vaga.distancia_km = _medir_distancia(vaga)
 
 
 # O projeto inteiro trabalha em UTC (o runner do GitHub Actions roda em
@@ -318,7 +327,7 @@ def ciclo_de_busca(perfil: Perfil):
                 continue
 
             total_brutas += len(vagas)
-            vagas_filtradas, descartes = filtrar_vagas(vagas, perfil.regras, medir_distancia=_medir_distancia)
+            vagas_filtradas, descartes = filtrar_vagas(vagas, perfil.regras, enriquecer=_enriquecer_vaga)
             descartes_escopo_ciclo.update(descartes)
 
             # Eixo secundário (Ibéria, quando ligado): mesma regra de cargo,
@@ -327,7 +336,7 @@ def ciclo_de_busca(perfil: Perfil):
             vagas_secundarias = []
             if perfil.eixo_secundario_ativo and perfil.regras_eixo_secundario is not None:
                 ids_filtradas = {v.id for v in vagas_filtradas}
-                candidatas, descartes_secundario = filtrar_vagas(vagas, perfil.regras_eixo_secundario, medir_distancia=_medir_distancia)
+                candidatas, descartes_secundario = filtrar_vagas(vagas, perfil.regras_eixo_secundario, enriquecer=_enriquecer_vaga)
                 descartes_escopo_ciclo.update(descartes_secundario)
                 vagas_secundarias = [v for v in candidatas if v.id not in ids_filtradas]
 
@@ -389,7 +398,7 @@ def ciclo_de_busca(perfil: Perfil):
                     perfil_nome=perfil.nome,
                     canal="imediata" if imediata else "digest",
                     motivo=vaga.motivo_aprovacao(perfil.regras),
-                    descricao=_descricao_se_elegivel(vaga),
+                    descricao=vaga.descricao,
                 )
 
                 total_novas += 1
@@ -430,7 +439,7 @@ def ciclo_de_busca(perfil: Perfil):
                     canal="imediata" if imediata else "digest",
                     motivo=vaga.motivo_aprovacao(perfil.regras_eixo_secundario),
                     exploratoria=True,
-                    descricao=_descricao_se_elegivel(vaga),
+                    descricao=vaga.descricao,
                 )
 
                 total_novas += 1

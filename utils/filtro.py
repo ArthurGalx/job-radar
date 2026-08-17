@@ -7,7 +7,7 @@ from job import Job, RegrasFiltro
 def filtrar_vagas(
     vagas: list[Job],
     regras: RegrasFiltro,
-    medir_distancia=None,
+    enriquecer=None,
 ) -> tuple[list[Job], Counter]:
     """Além da lista aprovada, devolve um Counter com os escopos que
     causaram reprovação por mercado (ver Job.escopo_rejeitado_por_mercado)
@@ -15,18 +15,20 @@ def filtrar_vagas(
     escopo era invisível no log, só dava pra ver bruta → filtrada → nova,
     nunca o porquê).
 
-    `medir_distancia`: callable(Job) -> float | None, aplicado só nas vagas
-    APROVADAS e antes do score (ver Job.distancia_km). Entra por parâmetro
-    em vez de import direto porque pode fazer rede — assim o filtro segue
-    testável offline, e quem monta o ciclo decide se quer medir. None
-    (default) = não mede, e nenhuma vaga leva desconto de deslocamento.
+    `enriquecer`: callable(Job) -> None, aplicado só nas vagas APROVADAS e
+    ANTES do score. É onde a vaga ganha o que exige rede — descrição do
+    anúncio e distância até a casa do usuário (ver Job.descricao e
+    Job.distancia_km) —, o que mantém pontuar_relevancia como função pura.
+    Entra por parâmetro em vez de import direto pra o filtro seguir
+    testável offline; None (default) = não enriquece, e os eixos que
+    dependem disso ficam neutros.
     """
     aprovadas = []
     descartes_escopo: Counter = Counter()
     for v in vagas:
         if v.combina_com(regras):
-            if medir_distancia is not None:
-                v.distancia_km = medir_distancia(v)
+            if enriquecer is not None:
+                enriquecer(v)
             v.relevancia = v.pontuar_relevancia(regras)
             v.motivo = v.motivo_aprovacao(regras)
             aprovadas.append(v)

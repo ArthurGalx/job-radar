@@ -778,7 +778,6 @@ class _Avaliacao:
 # ideal e a tolerável lado a lado sem diferença nenhuma.
 _PESO_CARGO_FORTE = 3
 _PESO_CARGO_AMBIGUO = 2
-_PESO_FERRAMENTA = 2
 _PESO_SENIORIDADE_ALVO = 2
 _PESO_SENIORIDADE_NEUTRA = 1  # título sem nível classificável — não penaliza por falta de informação
 # MEDIDO: classificar sem excluir (ver docstring de _detectar_senioridade)
@@ -794,17 +793,68 @@ _PESO_SENIORIDADE_NEUTRA = 1  # título sem nível classificável — não penal
 _PESO_SENIORIDADE_ACIMA_DO_ALVO = -2
 _PESO_MERCADO = 2
 _PESO_MERCADO_NAO_CONFIRMADO = 1  # remota sem mercado declarado no texto (aceita por padrão, sem confirmar)
-_PESO_IDIOMA = 1
 
-# Desconto por deslocamento, só pra vaga presencial/híbrida (ver
-# utils/geo.py). O usuário declarou raio confortável de 11 km; dentro dele
-# não há desconto, e fora dele o desconto é graduado em vez de eliminatório
-# — vaga boa longe continua chegando, só perde posição pra vaga boa perto.
-# Distância desconhecida não desconta nada, mesma regra de "não penalizar
-# por falta de informação" que já vale pra senioridade.
+# Deslocamento, só pra vaga presencial/híbrida (ver utils/geo.py). O
+# usuário declarou raio confortável de 11 km. Antes isso era desconto
+# somado por fora do eixo de mercado; virou o próprio eixo de LOCAL, com
+# resultado numérico idêntico (vaga a 27 km valia 2-2=0, hoje vale 0
+# direto) e uma conta a menos pra explicar. Distância desconhecida não
+# desconta nada, mesma regra de "não penalizar por falta de informação".
 _LIMITE_DISTANCIA_LONGE_KM = 20
-_PESO_DISTANCIA_LONGE = -1        # entre o raio ideal e o limite acima
-_PESO_DISTANCIA_MUITO_LONGE = -2  # além do limite
+
+# MEDIDO nas 10 vagas que o usuário mandou analisar: ágil, backlog,
+# histórias de usuário e comunicação com stakeholders aparecem em 8 a 10
+# delas. São pré-requisito de qualquer vaga de PO — pontuar isso não
+# separa nada, só empurra todo mundo pro mesmo número (foi exatamente o
+# que aconteceu: quase toda vaga aprovada empatava em 6).
+#
+# O que SEPARA é o que é raro no mercado e o usuário tem: integração via
+# API (4 das 10, e "diferencial" em duas), automação de processo, IA
+# aplicada, análise de dados própria (Power BI/SQL/Looker), discovery com
+# usuário e métrica de experiência (NPS/CX). Cada grupo presente na
+# descrição vale 1 ponto, teto de 3 — o teto existe pra vaga que cita tudo
+# não estourar a escala.
+_GRUPOS_AFINIDADE = {
+    "ia": (
+        "inteligencia artificial", "artificial intelligence", "ia generativa",
+        "genai", "llm", "chatgpt", "openai", "copilot", "chatbot", "agente de ia",
+    ),
+    "automacao": (
+        "automacao", "automation", "no-code", "low-code", "nocode", "lowcode",
+        "make", "zapier", "n8n", "rpa", "workflow",
+    ),
+    "integracao": ("api", "apis", "integracao", "integracoes", "webhook", "webhooks"),
+    "dados": (
+        "power bi", "powerbi", "looker", "metabase", "bigquery", "sql",
+        "analytics", "kpi", "kpis", "metricas", "dashboard", "dashboards",
+    ),
+    "discovery": (
+        "discovery", "pesquisa com usuario", "entrevista", "entrevistas",
+        "hipotese", "hipoteses", "validacao", "ux research",
+    ),
+    "experiencia": ("nps", "csat", "jornada do cliente", "experiencia do cliente", "cx"),
+}
+_TETO_AFINIDADE = 3
+
+# O espelho da afinidade: o que a vaga pede e o usuário NÃO tem. Não
+# filtra (a vaga continua chegando), só empurra pra baixo do ranking, pra
+# ele gastar energia primeiro no que tem chance real.
+#
+# Anos de experiência: ele é PO desde jan/2026. Vaga pedindo 5+ anos é
+# outra faixa, e o número aparece com frequência na descrição — é o sinal
+# mais confiável de "não é pra mim" que dá pra extrair de texto.
+_PADRAO_ANOS_ALTOS = re.compile(r"(?<!\w)([5-9]|1\d)\s*\+?\s*(?:a\s*\d+\s*)?anos?(?!\w)")
+_PESO_ANOS_ALTOS = -2
+
+# Certificação: PSPO/CSPO/SAFe/PMP aparecem em 2 das 10, e ele não tem
+# nenhuma. Vale -1 (e não -2) porque na maioria das vezes vem listada como
+# diferencial, não como corte.
+# "safe" ficou FORA depois de dar falso positivo na vaga real da Gauge:
+# lá o texto lista "Metodologias Ágeis (Scrum, Kanban, SAFe, Lean e etc)",
+# que é menção a framework, não exigência de certificado. Os que sobraram
+# são siglas que só existem como nome de certificação.
+_TERMOS_CERTIFICACAO = ("pspo", "cspo", "pmp", "psm", "certificacao scrum")
+_PESO_CERTIFICACAO = -1
 
 # Prioridade definida pelo usuário: Trainee, Júnior e Pleno pontuam o teto
 # de senioridade (bônus). Sênior/Especialista/Liderança pontuam negativo
@@ -870,6 +920,13 @@ class Job:
     # relevancia — "" até lá. Só pra aparecer na notificação; não
     # influencia filtro nem score.
     motivo: str = ""
+    # Texto do anúncio (requisitos + responsabilidades), quando a fonte
+    # permite buscar sem navegador — ver scrapers/descricao_*.py. Vazio nas
+    # outras. Preenchido por filtrar_vagas ANTES do score, junto da
+    # distância: é dele que saem os eixos de afinidade e barreira, e sem
+    # ele o score só tinha o título pra ler — que em vaga de produto é
+    # quase sempre "Product Owner" e nada mais.
+    descricao: str = ""
     # Distância em km até onde o usuário mora, pra vaga presencial/híbrida
     # (ver utils/geo.py). None = remota, ou endereço que não deu pra situar.
     # Preenchida por filtrar_vagas ANTES do score, porque descobrir o
@@ -1131,34 +1188,64 @@ class Job:
             idioma_bateu_titulo=idioma_bateu_titulo,
         )
 
+    def afinidade(self) -> tuple[int, list[str]]:
+        """Quantos dos diferenciais do usuário a vaga pede (0 a 3), e
+        quais — o segundo valor entra na notificação, pra ele ver POR QUE
+        a vaga pontuou alto.
+
+        Lê título + descrição. Sem descrição (fonte que não expõe, ver
+        scrapers/descricao_*.py), sobra o título e o resultado tende a 0 —
+        é a limitação conhecida do eixo, não um julgamento sobre a vaga.
+        """
+        texto = _normalizar(f"{self.titulo}\n{self.descricao}")
+        grupos = [
+            nome for nome, termos in _GRUPOS_AFINIDADE.items()
+            if any(_contem_termo(t, texto, aceitar_plural=True) for t in termos)
+        ]
+        return min(len(grupos), _TETO_AFINIDADE), grupos
+
+    def barreira(self) -> tuple[int, list[str]]:
+        """Desconto por requisito que o usuário não atende (0 a -3), e
+        quais. Só olha a descrição: título nunca diz 'exigimos 5 anos'."""
+        texto = _normalizar(self.descricao)
+        pontos = 0
+        motivos = []
+
+        if _PADRAO_ANOS_ALTOS.search(texto):
+            pontos += _PESO_ANOS_ALTOS
+            motivos.append("pede 5+ anos")
+
+        if any(_contem_termo(t, texto) for t in _TERMOS_CERTIFICACAO):
+            pontos += _PESO_CERTIFICACAO
+            motivos.append("pede certificação")
+
+        return pontos, motivos
+
     def pontuar_relevancia(self, regras: RegrasFiltro) -> int:
-        """Score (1 a 10 na prática, ver MEDIDO abaixo) pra ORDENAR vagas
-        que já passaram combina_com() — não filtra nada, não muda quantas
-        vagas notificam. Soma simples de pontos por sinal, sem aprendizado
-        de máquina (conjunto pequeno, conhecido — não precisa de modelo).
+        """Score de 0 a 10 pra ORDENAR vagas que já passaram combina_com()
+        — não filtra nada, não muda quantas vagas notificam. Soma simples
+        de pontos por sinal, sem aprendizado de máquina (conjunto pequeno,
+        conhecido — não precisa de modelo).
 
         - Cargo no título: 3 se bateu keyword forte, 2 se bateu só o par
-          ambíguo+qualificador, 0 se só bateu por ferramenta (sem cargo
-          nenhum no título).
-        - Ferramenta no título (Power BI, SQL, Python...): 2.
+          ambíguo+qualificador, 0 se só bateu por ferramenta.
         - Senioridade: Trainee/Júnior/Pleno (prioridade do usuário) = +2;
           título sem nível classificável = +1 (não penaliza por falta de
-          informação); Sênior/Especialista/Liderança = -2 (MEDIDO: 25% da
-          base é essa faixa, contra 5,5% Júnior/Pleno — 0 ponto pros dois
-          grupos deixava "acima do alvo" empatado com "sem informação"; a
-          vaga continua notificando, só cai no ranking); Estágio = 0 (nem
-          alvo nem o problema que motivou o deságio).
-        - Mercado: 2 quando não é remota (bate por cidade concreta — o
-          mercado É a cidade buscada) ou quando é remota com escopo batendo
-          um mercado aceito explicitamente; 1 quando é remota sem mercado
-          declarado no texto (aceita por padrão, sem confirmação).
-        - Idioma: 1 quando o perfil exige idioma E o título afirma isso
-          explicitamente (sinal direto, não só herdado do mercado); 0 caso
-          contrário.
-        - Distância (só presencial/híbrida, ver utils/geo.py): 0 dentro do
-          raio confortável declarado pelo usuário, -1 até 20 km, -2 além
-          disso. Vaga remota e endereço que não deu pra situar não
-          descontam nada.
+          informação); Sênior/Especialista/Liderança = -2; Estágio = 0.
+        - Local: 2 pra presencial/híbrida dentro do raio confortável ou
+          remota com mercado aceito confirmado; 1 entre o raio e 20 km, ou
+          remota sem mercado declarado; 0 além de 20 km.
+        - Afinidade com o currículo: 0 a 3 (ver afinidade()).
+        - Barreira: 0 a -3 (ver barreira()).
+
+        MEDIDO — por que a escala mudou: até aqui o score só lia o TÍTULO,
+        e título de vaga de produto não carrega quase nada ("Product Owner"
+        e ponto). O resultado era cargo forte (3) + mercado (2) + nível não
+        declarado (1) = 6 em quase tudo, com o 10 inalcançável por
+        construção: dependia de eixos que praticamente nunca disparavam
+        (ferramenta no título, idioma). Os dois eixos novos leem a
+        DESCRIÇÃO, que é onde a vaga realmente se diferencia — e o teto
+        virou alcançável: 3 + 2 + 2 + 3 = 10.
         """
         av = self._avaliar(regras)
 
@@ -1168,8 +1255,6 @@ class Job:
             pontos_cargo = _PESO_CARGO_AMBIGUO
         else:
             pontos_cargo = 0
-
-        pontos_ferramenta = _PESO_FERRAMENTA if av.bate_ferramenta else 0
 
         nivel = self.senioridade
         if nivel in _NIVEIS_SENIORIDADE_ALVO:
@@ -1181,26 +1266,30 @@ class Job:
         else:
             pontos_senioridade = 0  # Estágio — nem alvo nem acima, neutro-baixo
 
-        if not av.bate_remoto or av.mercado_confirmado:
-            pontos_mercado = _PESO_MERCADO
+        # Local: mercado e deslocamento no mesmo eixo. Distância só existe
+        # pra vaga presencial/híbrida; quando existe, é ela que manda.
+        if self.distancia_km is not None:
+            if self.distancia_km <= RAIO_IDEAL_KM:
+                pontos_local = _PESO_MERCADO
+            elif self.distancia_km <= _LIMITE_DISTANCIA_LONGE_KM:
+                pontos_local = _PESO_MERCADO_NAO_CONFIRMADO
+            else:
+                pontos_local = 0
+        elif not av.bate_remoto or av.mercado_confirmado:
+            pontos_local = _PESO_MERCADO
         else:
-            pontos_mercado = _PESO_MERCADO_NAO_CONFIRMADO
+            pontos_local = _PESO_MERCADO_NAO_CONFIRMADO
 
-        pontos_idioma = _PESO_IDIOMA if av.idioma_bateu_titulo else 0
+        pontos_afinidade, _ = self.afinidade()
+        pontos_barreira, _ = self.barreira()
 
-        if self.distancia_km is None:
-            pontos_distancia = 0
-        elif self.distancia_km <= RAIO_IDEAL_KM:
-            pontos_distancia = 0
-        elif self.distancia_km <= _LIMITE_DISTANCIA_LONGE_KM:
-            pontos_distancia = _PESO_DISTANCIA_LONGE
-        else:
-            pontos_distancia = _PESO_DISTANCIA_MUITO_LONGE
-
-        return (
-            pontos_cargo + pontos_ferramenta + pontos_senioridade
-            + pontos_mercado + pontos_idioma + pontos_distancia
+        total = (
+            pontos_cargo + pontos_senioridade + pontos_local
+            + pontos_afinidade + pontos_barreira
         )
+        # Trava na faixa 0-10: a barreira pode empurrar pra negativo, e
+        # score negativo não significa nada pra quem lê a notificação.
+        return max(0, min(10, total))
 
     def motivo_aprovacao(self, regras: RegrasFiltro) -> str:
         """Qual sinal aprovou a vaga — só pra aparecer na notificação, não

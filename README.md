@@ -63,7 +63,7 @@ Vaga de alta relevância chega na hora, com motivo da aprovação, nível e link
 |---|---|
 | **Busca** | Varre as fontes em paralelo, com rodízio de termos pra controlar custo por ciclo |
 | **Filtra** | Cargo (forte / ambíguo + qualificador / ferramenta + cargo), cidade ou mercado remoto, idioma |
-| **Pontua** | Score por vaga: cargo, ferramenta, senioridade, mercado, idioma e distância de casa (vaga presencial/híbrida longe perde pontos) — soma de sinais, sem IA |
+| **Pontua** | Score 0–10 por vaga: cargo, senioridade, local/distância, afinidade com o currículo e barreiras (requisitos que o candidato não atende) — os dois últimos lêem a descrição do anúncio, não só o título |
 | **Deduplica** | Por link e por empresa+título, pra pegar a mesma vaga republicada em fonte diferente |
 | **Notifica** | Alta relevância na hora; o resto num resumo diário ranqueado, melhor vaga no topo |
 | **Exporta** | Cada vaga aprovada vira uma linha no Google Sheets, via Apps Script publicado como web app — canal extra e best-effort: planilha fora do ar nunca impede notificação |
@@ -72,7 +72,7 @@ Vaga de alta relevância chega na hora, com motivo da aprovação, nível e link
 ## 🏗️ Arquitetura técnica
 
 - **Filtro em 3 níveis de confiança:** cargo inequívoco passa sozinho (ex: "Product Owner"); cargo ambíguo (ex: "Trainee", "Business Analyst") só conta com qualificador de domínio junto no título (produto, tecnologia, dados...); ferramenta/método (ex: "Scrum") só conta com palavra de cargo junto — nada aprova por palavra-chave solta.
-- **Score de relevância sem ML:** 5 sinais conhecidos (cargo, ferramenta, senioridade, mercado, idioma), pesos calibrados contra o histórico real do banco, não chutados.
+- **Score de relevância sem ML:** 5 eixos (cargo, senioridade, local, afinidade, barreira), calibrados contra vagas reais — não chutados. Afinidade e barreira comparam o que a vaga PEDE com o que o candidato TEM, lendo a descrição completa do anúncio.
 - **Zero infraestrutura:** GitHub Actions como motor de cron, SQLite como banco — versionado no próprio Git, o histórico de vagas já vistas *é* o commit.
 - **Resiliente:** nunca marca vaga como "vista" sem confirmar que a notificação saiu; alerta automático se metade das fontes falhar num ciclo; heartbeat diário confirmando que o robô ainda está de pé.
 - **136 testes automatizados em CI:** cada caso documenta um bug real já corrigido nesta base — não é cenário hipotético, é regressão registrada.
