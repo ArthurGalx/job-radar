@@ -413,4 +413,23 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 SHEETS_WEBHOOK_URL = os.getenv("SHEETS_WEBHOOK_URL", "")
 SHEETS_TOKEN = os.getenv("SHEETS_TOKEN", "")
 
+# Vaga a partir deste score tem a DESCRIÇÃO completa buscada e guardada na
+# planilha (ver scrapers/descricao_gupy.py) — é o material pra escrever
+# candidatura personalizada, que o card de busca não traz.
+#
+# 7 e não 8: o pedido original era "nota maior que 7", mas 7 é o teto
+# prático do score no escopo de produto (cargo forte 3 + senioridade alvo 2
+# + mercado 2 = 7; o eixo de ferramenta, que somaria +2, quase nunca bate em
+# título de produto). MEDIDO: zero vaga acima de 7 no banco desde a virada
+# de escopo, contra 3 vagas Gupy em 7 num único ciclo — com "> 7" o recurso
+# nunca dispararia.
+LIMIAR_CARTA = 7
+
+# Só a Gupy por enquanto: a página individual dela entrega os dados num
+# JSON dentro do HTML (sem navegador, GET simples). LinkedIn exige sessão e
+# tem anti-bot agressivo na página da vaga; Sólides e os outros portais
+# ainda não foram investigados. Conjunto (não lista) porque o uso é só
+# teste de pertinência, e o valor bate com Job.site.
+FONTES_COM_DESCRICAO = {"Gupy"}
+
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "jobs.db")

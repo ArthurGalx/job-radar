@@ -6,7 +6,13 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 
-from config import DIGEST_HORA_UTC, INTERVALO_MINUTOS, LIMIAR_DIGEST_IMEDIATO
+from config import (
+    DIGEST_HORA_UTC,
+    FONTES_COM_DESCRICAO,
+    INTERVALO_MINUTOS,
+    LIMIAR_CARTA,
+    LIMIAR_DIGEST_IMEDIATO,
+)
 from database.database import (
     BancoVazioSuspeito,
     definir_metadado,
@@ -25,11 +31,27 @@ from notifier.telegram import (
     processar_feedback_pendente,
 )
 from exporters.sheets import exportar_vaga
+from scrapers.descricao_gupy import buscar_descricao
 from perfis import FREQUENCIA_ALTA, PERFIS, Perfil
 from utils.filtro import filtrar_vagas
 from logger import get_logger
 
 logger = get_logger()
+
+
+def _descricao_se_elegivel(vaga) -> str:
+    """Texto do anúncio, só pra vaga que vale carta escrita à mão.
+
+    Duas condições (ver LIMIAR_CARTA e FONTES_COM_DESCRICAO em config.py):
+    score alto o bastante e fonte cuja página individual dá pra ler sem
+    navegador. As duas juntas mantêm isso em ~1-3 requisições por ciclo, em
+    cima das centenas que a busca já faz — buscar descrição de toda vaga
+    aprovada multiplicaria o custo do ciclo sem uso pra 95% delas.
+    """
+    if vaga.site not in FONTES_COM_DESCRICAO or vaga.relevancia < LIMIAR_CARTA:
+        return ""
+    logger.info(f"Buscando descrição completa (score {vaga.relevancia}): {vaga.titulo}")
+    return buscar_descricao(vaga.link)
 
 
 def _fontes_baixa_frequencia_ja_rodaram_hoje(perfil: Perfil) -> bool:
@@ -308,6 +330,7 @@ def ciclo_de_busca(perfil: Perfil):
                     perfil_nome=perfil.nome,
                     canal="imediata" if imediata else "digest",
                     motivo=vaga.motivo_aprovacao(perfil.regras),
+                    descricao=_descricao_se_elegivel(vaga),
                 )
 
                 total_novas += 1
@@ -348,6 +371,7 @@ def ciclo_de_busca(perfil: Perfil):
                     canal="imediata" if imediata else "digest",
                     motivo=vaga.motivo_aprovacao(perfil.regras_eixo_secundario),
                     exploratoria=True,
+                    descricao=_descricao_se_elegivel(vaga),
                 )
 
                 total_novas += 1

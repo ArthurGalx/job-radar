@@ -51,6 +51,11 @@ COLUNAS = [
     "publicado_em",
     "link",
     "situacao",
+    # Só preenchida em vaga que passou do LIMIAR_CARTA numa fonte com
+    # descrição disponível (ver FONTES_COM_DESCRICAO e main.py) — nas
+    # outras fica vazia. É o texto do anúncio, que o card de busca não traz
+    # e sem o qual não dá pra escrever candidatura personalizada.
+    "descricao",
 ]
 
 # Valor inicial da coluna que VOCÊ preenche na mão (a planilha existe pra
@@ -65,6 +70,7 @@ def montar_linha(
     canal: str,
     motivo: str,
     exploratoria: bool = False,
+    descricao: str = "",
 ) -> dict:
     """Traduz um Job na linha que vai pra planilha.
 
@@ -95,6 +101,7 @@ def montar_linha(
         "publicado_em": job.publicado_em,
         "link": job.link,
         "situacao": _SITUACAO_INICIAL,
+        "descricao": descricao,
     }
 
 
@@ -104,6 +111,7 @@ def exportar_vaga(
     canal: str,
     motivo: str,
     exploratoria: bool = False,
+    descricao: str = "",
 ) -> bool:
     """Manda uma vaga pra planilha. Devolve False (sem levantar exceção) em
     qualquer falha — inclusive quando o export nem está configurado."""
@@ -113,7 +121,7 @@ def exportar_vaga(
     payload = {
         "token": SHEETS_TOKEN,
         "colunas": COLUNAS,
-        "linha": montar_linha(job, perfil_nome, canal, motivo, exploratoria),
+        "linha": montar_linha(job, perfil_nome, canal, motivo, exploratoria, descricao),
     }
 
     try:
