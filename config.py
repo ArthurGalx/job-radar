@@ -22,6 +22,16 @@ KEYWORDS_CARGO_FORTE = [
     "Product Ops",
     "Analista de Produto Digital",
     "Dono do Produto",
+    # Cargo que o usuário já ocupou (estagiário de Business Architect na
+    # Yuca) e que descreve o que ele faz de mais distintivo: desenhar e
+    # automatizar processo de operação com integração e API. Entra como
+    # FORTE, não ambíguo: diferente de "Product Manager", o termo não é
+    # usado fora de tecnologia/consultoria — não existe "business architect
+    # de calçados". As grafias em português entram separadas porque o match
+    # é por borda de palavra e nenhuma cobre a outra.
+    "Business Architect",
+    "Arquiteto de Negócios",
+    "Arquiteta de Negócios",
     # "Product Discovery" fica só em TERMOS_FERRAMENTA (busca), não aqui:
     # é método, não cargo — como keyword duplicaria o termo de busca (a
     # derivação TERMOS_CARGO já puxa toda KEYWORDS) e gastaria uma sessão

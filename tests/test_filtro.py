@@ -183,6 +183,11 @@ CASOS_COMBINA_COM = [
     ("pm-com-marcador-tech-passa", "Digital Product Manager", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     ("gerente-de-produto-com-marcador-tech-passa", "Gerente de Produto Digital", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     ("product-owner-continua-forte", "Product Owner", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    # Business Architect: cargo que o usuário já ocupou, aprovado sozinho
+    # (não é usado fora de tecnologia/consultoria).
+    ("business-architect-passa-sozinho", "Business Architect", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    ("business-architect-com-nivel-passa", "Business Architect Jr", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    ("arquiteto-de-negocios-passa", "Arquiteto de Negócios", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     # "produto" NÃO é qualificador de domínio (se fosse, "Gerente de
     # Produto" se autoqualificaria e o eixo ambíguo nunca rejeitaria nada).
     ("produto-nao-qualifica-cargo-ambiguo", "Business Analyst de Produto", "São Paulo, SP", "Presencial", PERFIL_BR, False),
