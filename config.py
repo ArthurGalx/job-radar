@@ -429,6 +429,81 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 SHEETS_WEBHOOK_URL = os.getenv("SHEETS_WEBHOOK_URL", "")
 SHEETS_TOKEN = os.getenv("SHEETS_TOKEN", "")
 
+# Empresas cujo quadro de vagas é lido direto do ATS (ver scrapers/ats.py).
+# (nome exibido, plataforma, slug na API).
+#
+# DESCOBERTA ao vivo: testei ~120 empresas de tecnologia brasileiras contra
+# as três APIs; estas 22 responderam. Não dá pra adivinhar — nem toda
+# empresa usa uma das três, e o slug raramente é o nome óbvio (a Neon
+# aparece em duas plataformas, "xpinc" é a XP, "bees" é a Ambev Tech).
+# Pra acrescentar empresa nova, o teste é um GET em cada uma das três URLs
+# montadas em scrapers/ats.py.
+#
+# QuintoAndar (greenhouse, 89 vagas) e Loft FICARAM DE FORA de propósito:
+# são proptech, e o contrato atual do usuário tem cláusula de não
+# concorrência de 12 meses pra mesma área (ver SETORES_RESTRITOS abaixo).
+# Gastar requisição pra trazer vaga que a cláusula proíbe não faz sentido.
+EMPRESAS_ATS = [
+    # Fintech e serviços financeiros — o maior volume, e o setor que mais
+    # contrata produto em São Paulo.
+    ("Nubank", "ashby", "nubank"),
+    ("Stone", "greenhouse", "stone"),
+    ("C6 Bank", "greenhouse", "c6bank"),
+    ("Banco Inter", "greenhouse", "inter"),
+    ("XP", "greenhouse", "xpinc"),
+    ("Agibank", "greenhouse", "agibank"),
+    ("Neon", "lever", "neon"),
+    ("Warren", "ashby", "warren"),
+    ("EBANX", "greenhouse", "ebanx"),
+    ("Clara", "greenhouse", "clara"),
+    ("Omni", "ashby", "omni"),
+    # SaaS e produto digital — menor volume, maior aderência ao perfil.
+    ("VTEX", "greenhouse", "vtex"),
+    ("RD Station", "greenhouse", "rdstation"),
+    ("Cortex", "greenhouse", "cortex"),
+    ("Jusbrasil", "greenhouse", "jusbrasil"),
+    ("Arco", "greenhouse", "arcotech"),
+    ("Vitta", "greenhouse", "vitta"),
+    # Benefícios, marketplace e outros.
+    ("Wellhub (Gympass)", "greenhouse", "gympass"),
+    ("Flash", "greenhouse", "flash"),
+    ("Swile", "lever", "swile"),
+    ("Ambev Tech (BEES)", "greenhouse", "bees"),
+    ("Wildlife Studios", "greenhouse", "wildlifestudios"),
+]
+
+# Setor em que o usuário NÃO pode aceitar vaga: o contrato atual tem
+# cláusula de não concorrência de 12 meses pra mesma área, e ele trabalha
+# numa proptech (locação e coliving). Vaga que bate aqui leva o desconto
+# _PESO_SETOR_RESTRITO (ver job.barreira) — desconto, não filtro: a
+# cláusula tem prazo, e vaga boa de imobiliária daqui a alguns meses volta
+# a ser aceitável, então descartar seria perder informação.
+#
+# Duas frentes porque uma não cobre a outra: termo de setor pega o anúncio
+# que se descreve ("plataforma de locação de imóveis"), e nome de empresa
+# pega a proptech conhecida cujo anúncio não usa nenhuma dessas palavras.
+SETORES_RESTRITOS = [
+    # MEDIDO nas vagas reais da XP: "imobiliário"/"imobiliario" (adjetivo)
+    # SAIU da lista. "Crédito imobiliário" é produto de banco e corretora,
+    # citado no texto institucional de praticamente toda vaga da XP — o
+    # termo marcava 6 vagas de mercado financeiro como se fossem do setor
+    # proibido. Sobrou só o vocabulário que descreve o NEGÓCIO da empresa,
+    # não um produto que ela vende.
+    "imobiliaria", "imobiliária",
+    "proptech", "real estate", "coliving", "incorporadora",
+    "locacao de imoveis", "locação de imóveis",
+    "aluguel de imoveis", "aluguel de imóveis",
+    "compra e venda de imoveis", "compra e venda de imóveis",
+    "corretor de imoveis", "corretora de imoveis",
+    "administradora de condominios", "administradora de condomínios",
+]
+
+EMPRESAS_SETOR_RESTRITO = [
+    "quintoandar", "quinto andar", "loft", "yuca", "emcasa", "housi",
+    "apto", "lopes", "cyrela", "mrv", "tenda", "direcional", "vitacon",
+    "arbo", "imovelweb", "vivareal", "viva real", "zap imoveis",
+]
+
 # Blocklist de idioma: título que exige uma língua que o usuário não fala é
 # REJEITADO, por mais que cargo, cidade e mercado aprovem. Ele fala
 # português (nativo) e inglês (avançado) — qualquer outra língua no título

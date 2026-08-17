@@ -90,3 +90,29 @@ def test_distancia_nao_filtra_vaga():
     """Desconto é de ranking, nunca de aprovação: vaga longe continua
     passando no filtro, só cai no score."""
     assert _vaga(50.0).combina_com(PERFIL_BR.regras) is True
+
+
+# ---------------------------------------------------------------------------
+# Estado x cidade: "São Paulo" é os dois, e o texto de local quase sempre
+# traz o estado junto ("Campinas, São Paulo, Brazil"). MEDIDO nas vagas
+# reais do ATS: Campinas e Barueri eram medidas como 3,2 km (o centro da
+# capital) porque o nome do ESTADO batia antes do nome da CIDADE.
+# ---------------------------------------------------------------------------
+
+CASOS_ESTADO_NO_TEXTO = [
+    ("campinas-com-estado-junto", "Campinas, São Paulo, Brazil", 60, 120),
+    ("barueri-com-estado-junto", "Barueri, São Paulo, Brasil", 20, 40),
+    ("santo-andre-com-estado-junto", "Santo André, São Paulo", 10, 20),
+    # A capital sozinha continua batendo nela mesma.
+    ("capital-continua-perto", "São Paulo, SP", 0, RAIO_IDEAL_KM),
+]
+
+
+@pytest.mark.parametrize(
+    "nome,local,minimo,maximo",
+    CASOS_ESTADO_NO_TEXTO,
+    ids=[c[0] for c in CASOS_ESTADO_NO_TEXTO],
+)
+def test_cidade_vence_o_estado(nome, local, minimo, maximo):
+    d = distancia_km(local, "Presencial")
+    assert d is not None and minimo <= d <= maximo, f"{local} deu {d} km"

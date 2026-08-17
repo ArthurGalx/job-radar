@@ -30,6 +30,9 @@ from config import (
     ATIVAR_EIXO_IBERICO_BR,
     MERCADOS_REMOTO_ACEITOS,
     IDIOMAS_NAO_FALADOS,
+    SETORES_RESTRITOS,
+    EMPRESAS_SETOR_RESTRITO,
+    EMPRESAS_ATS,
     TERMOS_BUSCA,
     TERMOS_POR_CICLO,
 )
@@ -47,6 +50,7 @@ from config_intl import (
     TERMOS_EXCLUIDOS_INTL,
 )
 from job import RegrasFiltro
+from scrapers.ats import AtsScraper
 from scrapers.catho import CathoScraper
 from scrapers.geekhunter import GeekHunterScraper
 from scrapers.gupy import GupyScraper
@@ -123,6 +127,11 @@ _REGRAS_BR = RegrasFiltro(
     # Owner - Francês Fluente"), então a blocklist de idioma vale nos dois
     # perfis, não só no internacional.
     termos_excluidos=IDIOMAS_NAO_FALADOS,
+    # Cláusula de não concorrência de 12 meses no contrato atual: vaga de
+    # imobiliária/proptech leva desconto pesado no score, sem ser filtrada
+    # (a cláusula tem prazo — ver comentário em config.py).
+    setores_restritos=SETORES_RESTRITOS,
+    empresas_setor_restrito=EMPRESAS_SETOR_RESTRITO,
 )
 
 # Eixo secundário (Ibéria): mesma regra de cargo, cidade europeia em vez de
@@ -178,6 +187,13 @@ _REGRAS_BR_IBERIA = RegrasFiltro(
 # ainda pra essa combinação (fonte + termos em português) — FREQUENCIA_BAIXA
 # até medir rendimento real.
 _SCRAPERS_BR = [
+    # ATS das empresas (ver scrapers/ats.py): API JSON pública, sem
+    # navegador, e a única fonte que já entrega a DESCRIÇÃO da vaga junto —
+    # o que faz os eixos de afinidade e barreira do score funcionarem sem
+    # requisição extra. Fora do rodízio de termos de propósito: a API não
+    # tem busca, então todo ciclo enxerga o catálogo completo dessas
+    # empresas.
+    DefinicaoScraper(AtsScraper, FREQUENCIA_ALTA, {"empresas": EMPRESAS_ATS}),
     DefinicaoScraper(GupyScraper, FREQUENCIA_ALTA),        # ~2,6% de rendimento
     DefinicaoScraper(LinkedInScraper, FREQUENCIA_ALTA),     # ~8,5% — a melhor fonte de longe
     DefinicaoScraper(SolidesScraper, FREQUENCIA_ALTA),      # ~1,1%

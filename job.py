@@ -633,7 +633,12 @@ _NIVEIS_SENIORIDADE = [
     # não é (graduação concluída). Um rótulo só não deixava o score
     # distinguir os dois.
     ("Trainee", (r"trainee",)),
-    ("Estágio", (r"estagi[ao]", r"estagio")),
+    # MEDIDO na vaga real "Estagiário | Product Ops" (XP, via ATS): o
+    # padrão antigo (r"estagi[ao]") casava só "estagio"/"estagia" como
+    # palavra inteira, então "estagiário" e "estagiária" caíam em "Não
+    # especificado" e ganhavam +1 no score em vez de 0 — vaga de estágio
+    # competindo de igual pra igual com vaga pleno.
+    ("Estágio", (r"estagi\w*",)),
     ("Júnior", (r"junior", r"jr\.?")),
     ("Pleno", (r"pleno", r"pl\.?")),
     ("Sênior", (r"senior", r"sr\.?", r"sênior")),
@@ -748,6 +753,14 @@ class RegrasFiltro:
     # pelo eixo de mercado, porque o gate de idioma só olha vaga SEM mercado
     # declarado. None = não rejeita nada por título.
     termos_excluidos: list[str] | None = None
+    # Setor que o usuário não pode aceitar por cláusula contratual, e
+    # empresas conhecidas dele (ver SETORES_RESTRITOS/
+    # EMPRESAS_SETOR_RESTRITO em config.py). Não filtra: desconta no score
+    # (ver Job.barreira). Vive em RegrasFiltro, e não como constante de
+    # módulo, pelo mesmo motivo de todo o resto — é DADO de perfil, e o
+    # motor não deve ter opinião sobre o setor de ninguém.
+    setores_restritos: list[str] | None = None
+    empresas_setor_restrito: list[str] | None = None
 
 
 @dataclass
@@ -855,6 +868,14 @@ _PESO_ANOS_ALTOS = -2
 # são siglas que só existem como nome de certificação.
 _TERMOS_CERTIFICACAO = ("pspo", "cspo", "pmp", "psm", "certificacao scrum")
 _PESO_CERTIFICACAO = -1
+
+# Setor que o contrato atual do usuário proíbe por 12 meses (cláusula de
+# não concorrência; ele trabalha numa proptech). É a barreira mais dura da
+# lista — as outras custam esforço, essa é impedimento legal — mas segue
+# sendo DESCONTO e não filtro, porque a cláusula tem prazo: daqui a alguns
+# meses a mesma vaga volta a ser aceitável, e descartar agora apagaria a
+# informação de que ela existe.
+_PESO_SETOR_RESTRITO = -3
 
 # Prioridade definida pelo usuário: Trainee, Júnior e Pleno pontuam o teto
 # de senioridade (bônus). Sênior/Especialista/Liderança pontuam negativo
@@ -1204,9 +1225,15 @@ class Job:
         ]
         return min(len(grupos), _TETO_AFINIDADE), grupos
 
-    def barreira(self) -> tuple[int, list[str]]:
-        """Desconto por requisito que o usuário não atende (0 a -3), e
-        quais. Só olha a descrição: título nunca diz 'exigimos 5 anos'."""
+    def barreira(self, regras: RegrasFiltro | None = None) -> tuple[int, list[str]]:
+        """Desconto por requisito que o usuário não atende, e quais.
+
+        Anos e certificação só existem na descrição (título nunca diz
+        "exigimos 5 anos"). O setor restrito é o único que também olha
+        EMPRESA e TÍTULO: a proptech raramente se descreve como
+        "imobiliária" no corpo do anúncio — quem entrega o sinal é o nome
+        da empresa.
+        """
         texto = _normalizar(self.descricao)
         pontos = 0
         motivos = []
@@ -1219,7 +1246,23 @@ class Job:
             pontos += _PESO_CERTIFICACAO
             motivos.append("pede certificação")
 
+        if regras is not None and self._e_setor_restrito(regras):
+            pontos += _PESO_SETOR_RESTRITO
+            motivos.append("setor restrito por contrato")
+
         return pontos, motivos
+
+    def _e_setor_restrito(self, regras: RegrasFiltro) -> bool:
+        empresa_norm = _normalizar(self.empresa)
+        if any(_normalizar(e) in empresa_norm for e in (regras.empresas_setor_restrito or [])):
+            return True
+
+        # Termo de setor procurado em título + empresa + descrição: o
+        # anúncio pode se identificar em qualquer um dos três ("Product
+        # Owner - Locação", "Imobiliária X", "plataforma de imóveis").
+        texto = _normalizar(f"{self.titulo}\n{self.empresa}\n{self.descricao}")
+        return any(_contem_termo(_normalizar(t), texto, aceitar_plural=True)
+                   for t in (regras.setores_restritos or []))
 
     def pontuar_relevancia(self, regras: RegrasFiltro) -> int:
         """Score de 0 a 10 pra ORDENAR vagas que já passaram combina_com()
@@ -1236,7 +1279,10 @@ class Job:
           remota com mercado aceito confirmado; 1 entre o raio e 20 km, ou
           remota sem mercado declarado; 0 além de 20 km.
         - Afinidade com o currículo: 0 a 3 (ver afinidade()).
-        - Barreira: 0 a -3 (ver barreira()).
+        - Barreira: soma dos impedimentos (ver barreira()) — 5+ anos de
+          experiência (-2), certificação exigida (-1) e setor proibido por
+          contrato (-3). Pode passar de -3 quando se acumulam; o resultado
+          final é travado em 0.
 
         MEDIDO — por que a escala mudou: até aqui o score só lia o TÍTULO,
         e título de vaga de produto não carrega quase nada ("Product Owner"
@@ -1281,7 +1327,7 @@ class Job:
             pontos_local = _PESO_MERCADO_NAO_CONFIRMADO
 
         pontos_afinidade, _ = self.afinidade()
-        pontos_barreira, _ = self.barreira()
+        pontos_barreira, _ = self.barreira(regras)
 
         total = (
             pontos_cargo + pontos_senioridade + pontos_local

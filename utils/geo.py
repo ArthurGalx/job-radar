@@ -104,13 +104,21 @@ def _coordenadas_por_cidade(texto: str) -> tuple[float, float] | None:
     from job import _normalizar  # import local: evita ciclo (job não importa geo)
 
     texto_norm = _normalizar(texto)
-    # Cidade mais específica primeiro: "São Caetano do Sul" contém "São
-    # Paulo"? não — mas "Barueri, São Paulo" (estado) contém as duas, e a
-    # cidade específica é a que vale. Ordenar por tamanho do nome resolve
-    # sem precisar entender o formato de cada fonte.
-    for nome in sorted(_COORDENADAS_CIDADE, key=len, reverse=True):
+
+    # "São Paulo" é testado POR ÚLTIMO porque é cidade E estado, e o texto
+    # de local quase sempre traz os dois: "Campinas, São Paulo, Brazil".
+    # MEDIDO nas vagas reais do ATS — Campinas (84 km) e Barueri (27 km)
+    # eram medidas como 3,2 km, a distância do centro da capital, porque o
+    # nome do ESTADO batia antes do nome da cidade. Ordenar por tamanho do
+    # nome (a heurística anterior) não resolve: "são paulo" tem 9 letras e
+    # "campinas" tem 8, então o estado ganhava.
+    especificas = [n for n in _COORDENADAS_CIDADE if n != "sao paulo"]
+    for nome in sorted(especificas, key=len, reverse=True):
         if nome in texto_norm:
             return _COORDENADAS_CIDADE[nome]
+
+    if "sao paulo" in texto_norm:
+        return _COORDENADAS_CIDADE["sao paulo"]
     return None
 
 
