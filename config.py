@@ -16,20 +16,11 @@ load_dotenv()
 # possibilidade real de ser outra área. Basta bater no título.
 KEYWORDS_CARGO_FORTE = [
     "Product Owner",
-    "Product Manager",
     "Associate Product Manager",
     "Product Analyst",
     "Product Operations",
     "Product Ops",
-    "Analista de Produto",
-    # Plural precisa de entrada própria: o match é por borda de palavra
-    # (ver _contem_termo em job.py), então "Analista de Produto" NÃO bate
-    # "Analista de Produtos".
-    "Analista de Produtos",
     "Analista de Produto Digital",
-    "Assistente de Produto",
-    "Gerente de Produto",
-    "Gestor de Produto",
     "Dono do Produto",
     # "Product Discovery" fica só em TERMOS_FERRAMENTA (busca), não aqui:
     # é método, não cargo — como keyword duplicaria o termo de busca (a
@@ -38,11 +29,6 @@ KEYWORDS_CARGO_FORTE = [
     "Analista de Automação",
     "Analista de Automações",
     "Analista de Processos e Automação",
-    # Espanhol: LinkedInScraper deste perfil também busca em Argentina/Chile/
-    # México/Colômbia (ver LOCATIONS_LINKEDIN_REMOTO_APENAS), e nenhuma
-    # keyword em português cobre título em espanhol.
-    "Analista de Producto",
-    "Gerente de Producto",
     "Dueño de Producto",
 ]
 
@@ -59,6 +45,33 @@ KEYWORDS_CARGO_AMBIGUO = [
     # graduação já terminou (dez/2025) — vaga de estágio seria degrau pra
     # trás, e "estágio" é um dos termos de maior volume bruto dos portais
     # (cada busca dessas custa uma sessão de navegador igual às outras).
+    #
+    # MEDIDO no primeiro ciclo real do escopo novo (285 vagas): "Product
+    # Manager"/"Gerente de Produto" estava como cargo FORTE e 175 delas
+    # (61%) eram título de PM SEM nenhum marcador de tecnologia — "Product
+    # Manager – Negocio Café" (Pascual), "Product Manager Laundry" (Haier),
+    # "Gerente de Produto - Calçados" (C&A), "Product Manager - Thickening"
+    # (FLSmidth). Em indústria, varejo e farma essas palavras designam
+    # gerente de categoria/marca, profissão diferente da de produto digital.
+    # É o mesmo caso de "Business Analyst" logo abaixo, e agora usa o mesmo
+    # mecanismo: só aprova com qualificador de domínio junto.
+    #
+    # "Product Owner" e "Associate Product Manager" continuam FORTES de
+    # propósito — não existem praticamente fora de tecnologia. O custo
+    # aceito aqui é perder PM de startup cujo título não cite tecnologia
+    # (ex: "Product Manager - Ryz Labs"), decisão tomada com o número acima
+    # na mesa.
+    "Product Manager",
+    "Gerente de Produto",
+    "Gerente de Producto",
+    "Gestor de Produto",
+    "Analista de Produto",
+    # Plural precisa de entrada própria: o match é por borda de palavra
+    # (ver _contem_termo em job.py), então "Analista de Produto" NÃO bate
+    # "Analista de Produtos".
+    "Analista de Produtos",
+    "Analista de Producto",
+    "Assistente de Produto",
     "Business Analyst",
     "Analista de Negócios",
     "Analista de Sistemas",
@@ -78,10 +91,13 @@ KEYWORDS_CARGO_AMBIGUO = [
 # vivo: não aprova vaga sozinho, mas confirma que um "Trainee"/"Business
 # Analyst" está no escopo de tech.
 QUALIFICADORES_DOMINIO = [
-    "produto",
-    "produtos",
-    "product",
-    "producto",
+    # "produto"/"product"/"producto" NÃO entram, por mais natural que
+    # pareça: desde que "Gerente de Produto" virou cargo ambíguo (ver
+    # acima), a palavra "produto" está DENTRO do próprio cargo — ela se
+    # autoqualificaria e o par ambíguo+qualificador nunca rejeitaria nada.
+    # Qualificador aqui é marcador de DOMÍNIO (é tech?), não repetição do
+    # cargo. Custo conhecido: "Trainee de Produto" sozinho deixa de passar;
+    # "Trainee de Produto Digital" passa pelo "digital".
     "tecnologia",
     "tecnología",
     "technology",
@@ -103,6 +119,17 @@ QUALIFICADORES_DOMINIO = [
     "growth",
     "e-commerce",
     "ecommerce",
+    "marketplace",
+    "fintech",
+    "app",
+    "mobile",
+    "web",
+    "cloud",
+    "api",
+    "crm",
+    "erp",
+    "ia",
+    "ai",
     "dados",
     "data",
     "bi",
@@ -297,7 +324,21 @@ LOCATIONS_LINKEDIN = ["Brasil"]
 # (LOCATIONS_INTL) — evita arriscar nome de país nunca testado (grafia
 # errada ou região que o LinkedIn não resolve como location de verdade,
 # como já visto com "LATAM"/"Latin America").
-LOCATIONS_LINKEDIN_REMOTO_APENAS = ["Argentina", "Chile", "México", "Colômbia", "Espanha", "Portugal"]
+# VAZIO desde a virada pro escopo de produto. MEDIDO no primeiro ciclo real:
+# das 285 vagas novas do perfil BRASIL, 269 (94%) tinham local fora do
+# Brasil — Product Manager do mercado local de Chile, Espanha e Portugal,
+# achado justamente por esta lista. Para vaga de dados em espanhol pagando
+# em dólar isso fazia sentido; para PO júnior morando em São Paulo, o perfil
+# BR virou um segundo perfil internacional pior que o original.
+#
+# Vaga remota de fora continua coberta — é exatamente o que o PERFIL_INTL
+# faz (ver perfis.py), com termos e filtro de idioma próprios. A separação
+# de responsabilidade entre os dois perfis é o que já existia no projeto;
+# esta lista é que estava furando ela.
+#
+# Lista mantida vazia em vez de apagada: o LinkedInScraper aceita o
+# parâmetro (locations_remoto_apenas) e religar é só repor os países.
+LOCATIONS_LINKEDIN_REMOTO_APENAS = []
 
 # Mercado que a vaga remota precisa aceitar pra contar, quando o texto de
 # local DECLARA um escopo geográfico ("Remote — US only", "Remote — India").
@@ -319,7 +360,13 @@ LOCATIONS_LINKEDIN_REMOTO_APENAS = ["Argentina", "Chile", "México", "Colômbia"
 # quando o texto disser isso literalmente (guarda-chuva de verdade, não
 # substituto de nome de país). Portugal e Espanha entraram nominalmente
 # pelo mesmo motivo, desde antes.
-MERCADOS_REMOTO_ACEITOS = ["Brasil", "LATAM", "Argentina", "Chile", "México", "Colômbia", "Portugal", "Espanha"]
+# Encolhida junto com LOCATIONS_LINKEDIN_REMOTO_APENAS acima, e pelo mesmo
+# motivo: aceitar "Remote — Chile"/"Remote — Espanha" no perfil BR deixava
+# entrar vaga do mercado local de outro país mesmo depois de parar de
+# buscar lá (outras fontes também trazem). "LATAM" fica porque é
+# guarda-chuva que inclui o Brasil — vaga "Remote - LATAM" contrata
+# brasileiro. País hispanofalante nominalmente é o que sai.
+MERCADOS_REMOTO_ACEITOS = ["Brasil", "LATAM"]
 
 INTERVALO_MINUTOS = int(os.getenv("INTERVALO_MINUTOS", 180))
 

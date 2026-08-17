@@ -22,7 +22,7 @@ virar asserção, não deduzido lendo o comentário.
 
 import pytest
 
-from job import Job, extrair_escopo_remoto
+from job import Job, _detectar_senioridade, extrair_escopo_remoto
 from perfis import PERFIL_BR, PERFIL_INTL
 
 
@@ -143,11 +143,11 @@ CASOS_COMBINA_COM = [
     # cargo remoto sem relação nenhuma com o mercado passava só por não ter
     # nada que o rejeitasse.
     ("spanish-speaking-sem-mercado-passa", "Spanish Speaking Product Owner", "Remote", "Remoto", PERFIL_INTL, True),
-    ("product-manager-latam-passa", "Product Manager LATAM", "Remote", "Remoto", PERFIL_INTL, True),
-    ("sem-idioma-sem-mercado-barrada", "Senior Product Manager", "Remote", "Remoto", PERFIL_INTL, False),
+    ("product-owner-latam-passa", "Product Owner LATAM", "Remote", "Remoto", PERFIL_INTL, True),
+    ("sem-idioma-sem-mercado-barrada", "Senior Product Owner", "Remote", "Remoto", PERFIL_INTL, False),
     # Mercado CONFIRMADO no texto dispensa o sinal de idioma no título — o
     # país hispanofalante já é o próprio sinal.
-    ("mercado-confirmado-dispensa-idioma-no-titulo", "Senior Product Manager", "Remote - Espanha", "Remoto", PERFIL_INTL, True),
+    ("mercado-confirmado-dispensa-idioma-no-titulo", "Senior Product Owner", "Remote - Espanha", "Remoto", PERFIL_INTL, True),
 
     # Perfil Brasil: cargo e cidade são checados em campos separados
     # (título vs. local) — cidade fora da lista aceita barra mesmo com
@@ -165,7 +165,26 @@ CASOS_COMBINA_COM = [
     ("trainee-sem-qualificador-barrado", "Programa Trainee 2026", "São Paulo, SP", "Presencial", PERFIL_BR, False),
     ("trainee-com-qualificador-passa", "Trainee de Tecnologia", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     ("cargo-ambiguo-sem-qualificador-barrado", "Business Analyst", "São Paulo, SP", "Presencial", PERFIL_BR, False),
-    ("cargo-ambiguo-com-qualificador-passa", "Business Analyst de Produto", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    ("cargo-ambiguo-com-qualificador-passa", "Business Analyst de Tecnologia", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    # MEDIDO no primeiro ciclo real (285 vagas, 61% eram isto): "Product
+    # Manager"/"Gerente de Produto" em indústria e varejo é gerente de
+    # categoria, não produto digital. Virou cargo ambíguo — exige marcador
+    # de tecnologia no título. "Product Owner" continua forte porque
+    # praticamente não existe fora de tech.
+    ("pm-de-industria-barrado", "Product Manager - Negócio Café", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    ("gerente-de-produto-varejo-barrado", "Gerente de Produto - Calçados", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    ("pm-com-marcador-tech-passa", "Digital Product Manager", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    ("gerente-de-produto-com-marcador-tech-passa", "Gerente de Produto Digital", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    ("product-owner-continua-forte", "Product Owner", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    # "produto" NÃO é qualificador de domínio (se fosse, "Gerente de
+    # Produto" se autoqualificaria e o eixo ambíguo nunca rejeitaria nada).
+    ("produto-nao-qualifica-cargo-ambiguo", "Business Analyst de Produto", "São Paulo, SP", "Presencial", PERFIL_BR, False),
+    # Geografia: perfil BR deixou de aceitar mercado remoto de outro país
+    # (94% do primeiro ciclo era isso) — vaga remota de fora é assunto do
+    # perfil Internacional.
+    ("remoto-chile-barrado-no-perfil-br", "Product Owner", "Remote - Chile", "Remoto", PERFIL_BR, False),
+    ("remoto-brasil-passa-no-perfil-br", "Product Owner", "Remote - Brazil", "Remoto", PERFIL_BR, True),
+    ("remoto-latam-passa-no-perfil-br", "Product Owner", "Remote - LATAM", "Remoto", PERFIL_BR, True),
     # MEDIDO ao vivo na Gupy: o card corta o nome da cidade em ~10
     # caracteres ("Santo Andr... - SP"). CIDADES tem as duas grafias por
     # causa disso — nenhuma das duas cobre a outra (borda de palavra).
@@ -190,6 +209,42 @@ def test_combina_com(nome, titulo, local, modalidade, perfil, esperado):
         site="Teste", modalidade=modalidade,
     )
     assert job.combina_com(perfil.regras) == esperado
+
+
+# ---------------------------------------------------------------------------
+# _detectar_senioridade -- "manager"/"gerente" dentro do NOME do cargo não é
+# liderança. MEDIDO no primeiro ciclo do escopo de produto: "APM (Associate
+# Product Manager)" classificava "Liderança" e levava -2 no score, quando o
+# anúncio não disse nada sobre nível.
+# ---------------------------------------------------------------------------
+
+CASOS_SENIORIDADE = [
+    ("apm-sem-nivel-nao-e-lideranca", "APM (Associate Product Manager)", "Não especificado"),
+    ("growth-pm-sem-nivel-nao-e-lideranca", "Growth Product Manager", "Não especificado"),
+    ("product-owner-sem-nivel", "Product Owner", "Não especificado"),
+    # Nível explícito continua ganhando do nome do cargo.
+    ("pm-junior", "Product Manager Junior", "Júnior"),
+    ("gerente-de-produto-jr", "Gerente de Produto Jr", "Júnior"),
+    ("apm-pleno", "Associate Product Manager Pleno", "Pleno"),
+    ("pm-senior", "Product Manager Sênior", "Sênior"),
+    # Liderança de verdade não pode ser afetada pela limpeza do nome do
+    # cargo: aqui "gerente"/"head"/"coordenador" é chefia mesmo.
+    ("gerente-de-vendas-e-lideranca", "Gerente de Vendas", "Liderança"),
+    ("head-de-produto-e-lideranca", "Head de Produto", "Liderança"),
+    ("coordenador-de-produto-e-lideranca", "Coordenador de Produto", "Liderança"),
+    # Trainee e Estágio viraram níveis separados (só trainee é alvo).
+    ("trainee-e-nivel-proprio", "Trainee de Tecnologia", "Trainee"),
+    ("estagio-e-nivel-proprio", "Estágio em Produto Digital", "Estágio"),
+]
+
+
+@pytest.mark.parametrize(
+    "nome,titulo,esperado",
+    CASOS_SENIORIDADE,
+    ids=[c[0] for c in CASOS_SENIORIDADE],
+)
+def test_detectar_senioridade(nome, titulo, esperado):
+    assert _detectar_senioridade(titulo) == esperado
 
 
 # ---------------------------------------------------------------------------

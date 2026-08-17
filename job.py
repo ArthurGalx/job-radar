@@ -638,13 +638,40 @@ _NIVEIS_SENIORIDADE = [
 ]
 
 
+# Compostos em que "manager"/"gerente"/"owner" faz parte do NOME do cargo e
+# não indica liderança de pessoas. MEDIDO no primeiro ciclo do escopo de
+# produto: "APM (Associate Product Manager)" e "Growth Product Manager"
+# eram classificados "Liderança" e levavam _PESO_SENIORIDADE_ACIMA_DO_ALVO
+# (-2) — o cargo-alvo do usuário sendo penalizado como se fosse vaga de
+# gestão. Só acontecia com título SEM nível explícito ("Product Manager
+# Junior" já batia "Júnior" antes de chegar em Liderança, porque a ordem da
+# lista vai do mais específico pro mais genérico), o que escondia o
+# problema: a vaga de PM sem senioridade declarada caía de +1 ("não
+# especificado", que é o que ela é) pra -2. Três pontos de diferença no
+# score, exatamente na faixa que decide notificação imediata.
+_COMPOSTOS_DE_CARGO = re.compile(
+    r"(?:associate\s+)?product\s+(?:manager|owner)"
+    r"|program\s+manager"
+    r"|project\s+manager"
+    r"|gerente\s+de\s+produtos?"
+    r"|gerente\s+de\s+producto"
+    r"|gestor\s+de\s+produtos?",
+    re.IGNORECASE,
+)
+
+
 def _detectar_senioridade(titulo: str) -> str:
     """Classifica o nível pelo título, sem excluir nada — a ideia é decidir
     na hora de ler a notificação se vale a pena abrir o link, não descartar
     vaga automaticamente (júnior pode virar sênior lendo a descrição, e
     "PL"/"Sr" no título nem sempre reflete o que a empresa pede de verdade).
+
+    O nome do cargo é removido antes de classificar (ver
+    _COMPOSTOS_DE_CARGO): o que sobra é só o que o anúncio disse sobre
+    NÍVEL. "Gerente de Vendas" continua Liderança — lá "gerente" não faz
+    parte de um cargo de produto, é chefia mesmo.
     """
-    titulo_norm = _normalizar(titulo)
+    titulo_norm = _COMPOSTOS_DE_CARGO.sub(" ", _normalizar(titulo))
 
     for nivel, padroes in _NIVEIS_SENIORIDADE:
         for padrao in padroes:

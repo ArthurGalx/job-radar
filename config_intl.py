@@ -27,20 +27,12 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DB_PATH, CIDADES_EUROPA
 # termos de busca correspondentes) se a prioridade mudar pra renda remota.
 KEYWORDS_INTL = [
     "Product Owner",
-    "Product Manager",
     "Associate Product Manager",
     "Product Analyst",
     "Product Operations",
-    "Junior Product Manager",
     # Nomenclatura em espanhol
-    "Analista de Producto",
-    "Gerente de Producto",
     "Dueño de Producto",
     "Propietario de Producto",
-    # Nomenclatura em português
-    "Analista de Produto",
-    "Analista de Produtos",
-    "Gerente de Produto",
 ]
 
 # MEDIDO contra as 1.168 vagas do jobs.db real: "Business Analyst" como
@@ -55,6 +47,18 @@ KEYWORDS_INTL = [
 # perfis.py) — a simplicidade fazia sentido enquanto todo cargo da lista era
 # inequívoco; "Business Analyst" nunca foi.
 KEYWORDS_AMBIGUO_INTL = [
+    # Mesma correção do perfil BR (ver o MEDIDO em KEYWORDS_CARGO_AMBIGUO
+    # no config.py): "Product Manager" em indústria/varejo/farma é gerente
+    # de categoria, não produto digital — e boa parte do ruído medido veio
+    # justamente de Espanha, Portugal e Chile, que é onde ESTE perfil
+    # busca. Manter forte aqui só mudaria o canal por onde o mesmo lixo
+    # chega.
+    "Product Manager",
+    "Gerente de Producto",
+    "Gerente de Produto",
+    "Analista de Producto",
+    "Analista de Produto",
+    "Analista de Produtos",
     "Business Analyst",
     "Analista de Negocio",
     "Analista de Negócios",
@@ -65,9 +69,9 @@ KEYWORDS_AMBIGUO_INTL = [
 # Mesmo papel do QUALIFICADORES_DOMINIO do config.py, em versão multilíngue:
 # confirma que o cargo ambíguo é de produto/tech.
 QUALIFICADORES_DOMINIO_INTL = [
-    "product",
-    "producto",
-    "produto",
+    # "product"/"producto"/"produto" fora pelo mesmo motivo do config.py:
+    # a palavra está dentro do próprio cargo ambíguo agora, então ela se
+    # autoqualificaria e o par nunca rejeitaria nada.
     "digital",
     "saas",
     "platform",
