@@ -194,6 +194,10 @@ CASOS_COMBINA_COM = [
     # o que ele quer disputar.
     ("trainee-generalista-agora-passa", "Programa Trainee 2027", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     ("trainee-de-tecnologia-passa", "Trainee de Tecnologia", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    # MEDIDO nos títulos reais do Seja Trainee: sem entrada própria pro
+    # plural, "Programa de Trainees 2027" ficava fora do radar inteiro (o
+    # match de cargo é por borda de palavra).
+    ("trainee-no-plural-passa", "Programa de Trainees 2027", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     # Famílias adjacentes acrescentadas junto (BizOps e automação/IA).
     ("business-operations-passa", "Business Operations Analyst", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     ("especialista-automacao-passa", "Especialista em Automação", "São Paulo, SP", "Presencial", PERFIL_BR, True),
@@ -297,6 +301,7 @@ CASOS_SENIORIDADE = [
     ("coordenador-de-produto-e-lideranca", "Coordenador de Produto", "Liderança"),
     # Trainee e Estágio viraram níveis separados (só trainee é alvo).
     ("trainee-e-nivel-proprio", "Trainee de Tecnologia", "Trainee"),
+    ("trainee-plural-e-nivel-proprio", "Nova Era Trainees", "Trainee"),
     ("estagio-e-nivel-proprio", "Estágio em Produto Digital", "Estágio"),
 ]
 

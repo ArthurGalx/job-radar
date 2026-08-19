@@ -41,7 +41,13 @@ KEYWORDS_CARGO_FORTE = [
     # USP) e a área é definida durante o programa. Filtrar por domínio aqui
     # descartava justamente o que ele quer disputar.
     "Trainee",
+    # Plural precisa de entrada própria: o match de cargo é por borda de
+    # palavra (ver _contem_termo em job.py), então "Trainee" NÃO bate
+    # "Trainees" — e título como "Nova Era Trainees" ou "Programa de
+    # Trainees 2027" ficava fora do radar inteiro, não só do nível.
+    "Trainees",
     "Programa de Trainee",
+    "Programa de Trainees",
     # BizOps: família medida como a de melhor relação volume/concorrência
     # pro perfil dele (10 vagas júnior/pleno só nas 22 empresas do ATS,
     # contra 14 de produto, com uma fração dos candidatos). É o que ele fez

@@ -632,7 +632,11 @@ _NIVEIS_SENIORIDADE = [
     # em tecnologia é ALVO declarado (ver _NIVEIS_SENIORIDADE_ALVO), estágio
     # não é (graduação concluída). Um rótulo só não deixava o score
     # distinguir os dois.
-    ("Trainee", (r"trainee",)),
+    # MEDIDO nos títulos reais do Seja Trainee ("Nova Era Trainees",
+    # "Programa de Trainees 2027"): sem o plural, o nível saía "Não
+    # especificado" e a vaga levava +1 em vez de +2 — programa de trainee
+    # perdendo ponto por causa de um "s".
+    ("Trainee", (r"trainees?",)),
     # MEDIDO na vaga real "Estagiário | Product Ops" (XP, via ATS): o
     # padrão antigo (r"estagi[ao]") casava só "estagio"/"estagia" como
     # palavra inteira, então "estagiário" e "estagiária" caíam em "Não
