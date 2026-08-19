@@ -102,6 +102,20 @@ def _linha_aviso_antiga(job) -> str:
     return f"⚠️ <b>Postada {job.publicado_em}</b> — pode já estar preenchida.\n"
 
 
+def _linha_prazo(job) -> str:
+    """Data-limite de inscrição, quando a fonte informa (ver
+    Job.prazo_inscricao). Vaga comum fica aberta até preencher; programa
+    de trainee fecha em data marcada, e perder o prazo custa o ano — por
+    isso o prazo vem antes do link, e encerrado vem com aviso em vez de
+    ser escondido (a data pode ter sido extraída errado do texto)."""
+    if not job.prazo_inscricao:
+        return ""
+    dia, mes, ano = job.prazo_inscricao[8:10], job.prazo_inscricao[5:7], job.prazo_inscricao[:4]
+    if job.prazo_encerrado:
+        return f"<b>⚠️ Inscrições encerradas em:</b> {dia}/{mes}/{ano}\n"
+    return f"<b>🗓 Inscrições até:</b> {dia}/{mes}/{ano}\n"
+
+
 def notificar_vaga(job) -> bool:
     # TODO (Fase 3): incluir aqui a % de compatibilidade com o currículo,
     # calculada por IA, quando essa etapa for implementada.

@@ -27,6 +27,7 @@ DUAS PECULIARIDADES, ambas tratadas aqui e não no motor:
 
 import html
 import re
+from datetime import date
 
 import requests
 
@@ -59,6 +60,74 @@ _TITULOS_EDITORIAIS = (
 )
 
 _LOCAL_NACIONAL = "Brasil (programa nacional)"
+
+# Prazo de inscrição: o dado que mais importa em programa de trainee (vaga
+# comum fica aberta até preencher; trainee fecha em data marcada, e perder
+# custa o ano). Não existe campo próprio — está no texto da matéria, em
+# formatos variados. MEDIDO em 20 artigos reais: os padrões abaixo
+# extraem 14 (70%). Os 6 que sobram são pauta de panorama ("Os Maiores
+# Trainees de Auditoria"), que não anuncia programa único, ou matéria que
+# não cita a data.
+_PADROES_PRAZO = (
+    re.compile(r'inscri[çc][õo]es?[^.]{0,60}?at[ée]\s+(?:o\s+dia\s+)?(\d{1,2}\s*(?:/|\s+de\s+)\s*\w+)', re.I),
+    re.compile(r'at[ée]\s+(?:o\s+dia\s+)?(\d{1,2}\s*(?:/|\s+de\s+)\s*\w+)', re.I),
+    re.compile(r'encerra[mn]?(?:-se)?[^.]{0,40}?(\d{1,2}\s*(?:/|\s+de\s+)\s*\w+)', re.I),
+    re.compile(r'prazo[^.]{0,40}?(\d{1,2}\s*(?:/|\s+de\s+)\s*\w+)', re.I),
+)
+
+_MESES = {
+    "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
+    "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12,
+}
+
+
+def _normalizar_prazo(trecho: str) -> str:
+    """"17 de setembro", "31/AGOSTO", "21/08" -> "2026-09-17".
+
+    ISO e não o texto original porque a planilha ordena por essa coluna —
+    "21/08" e "17 de setembro" lado a lado não ordenam.
+
+    O ANO nunca aparece no texto (o artigo é do ano corrente), então é
+    inferido: data que já passou há mais de 30 dias é do ano que vem. É o
+    caso real do programa que abre em novembro pra turma do ano seguinte.
+    """
+    from job import _normalizar
+
+    partes = re.split(r"/|\s+de\s+", _normalizar(trecho).strip())
+    if len(partes) < 2:
+        return ""
+
+    try:
+        dia = int(partes[0])
+    except ValueError:
+        return ""
+
+    mes_texto = partes[1].strip()
+    if mes_texto.isdigit():
+        mes = int(mes_texto)
+    else:
+        mes = _MESES.get(mes_texto[:3], 0)
+    if not (1 <= mes <= 12 and 1 <= dia <= 31):
+        return ""
+
+    hoje = date.today()
+    try:
+        prazo = date(hoje.year, mes, dia)
+    except ValueError:
+        return ""
+    if (hoje - prazo).days > 30:
+        prazo = prazo.replace(year=hoje.year + 1)
+    return prazo.isoformat()
+
+
+def _extrair_prazo(texto: str) -> str:
+    for padrao in _PADROES_PRAZO:
+        m = padrao.search(texto)
+        if m:
+            prazo = _normalizar_prazo(m.group(1))
+            if prazo:
+                return prazo
+    return ""
 
 
 def _texto(trecho: str) -> str:
@@ -116,5 +185,10 @@ class SejaTraineeScraper(BaseScraper):
             publicado_em=(artigo.get("date") or "")[:10],
         )
         job.programa_nacional = True
-        job.descricao = _texto((artigo.get("excerpt") or {}).get("rendered", ""))
+        # O texto completo vem na própria listagem (a API do WordPress
+        # devolve content junto), então extrair o prazo não custa
+        # requisição nenhuma.
+        conteudo = _texto((artigo.get("content") or {}).get("rendered", ""))
+        job.descricao = _texto((artigo.get("excerpt") or {}).get("rendered", "")) or conteudo[:600]
+        job.prazo_inscricao = _extrair_prazo(conteudo)
         return job

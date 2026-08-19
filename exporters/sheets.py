@@ -49,6 +49,10 @@ COLUNAS = [
     "motivo",
     "fonte",
     "publicado_em",
+    # Data-limite de inscrição em ISO (ordena na planilha; ver
+    # Job.prazo_inscricao). Só programa de trainee e vaga da Gupy
+    # costumam ter — nas outras fica vazia.
+    "prazo_inscricao",
     "link",
     # NÃO existe coluna de acompanhamento aqui (havia uma, `situacao`,
     # nascendo sempre como "não avaliada"). O usuário criou as dele na
@@ -105,6 +109,7 @@ def montar_linha(
         "motivo": motivo,
         "fonte": job.site,
         "publicado_em": job.publicado_em,
+        "prazo_inscricao": job.prazo_inscricao,
         "link": job.link,
         "descricao": descricao,
     }

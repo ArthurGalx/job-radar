@@ -39,6 +39,13 @@ def buscar_descricao(link: str) -> str:
     return montar_texto(buscar_next_data(link, _CAMINHO))
 
 
+def buscar_prazo(link: str) -> str:
+    """Data-limite de inscrição em ISO, do campo `registerEndDate` — a
+    Gupy é a única fonte com prazo estruturado. Vaga sem prazo definido
+    devolve ""."""
+    return buscar_next_data(link, _CAMINHO).get("registerEndDate", "") or ""
+
+
 def buscar_endereco(link: str) -> str:
     """Endereço completo com CEP, ou "" se a fonte não expõe.
 

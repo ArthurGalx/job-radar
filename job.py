@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 import hashlib
 import re
+from datetime import date
 import unicodedata
 
 # Sem ciclo: utils/geo.py importa _normalizar deste módulo DENTRO das
@@ -968,6 +969,11 @@ class Job:
     # deduzido do texto: só o scraper sabe que está lendo um catálogo de
     # programa de trainee, e não um anúncio comum sem local preenchido.
     programa_nacional: bool = False
+    # Data-limite de inscrição, em ISO (2026-09-17), quando a fonte
+    # informa. Existe por causa de programa de trainee: diferente de vaga
+    # comum, que fica aberta até preencher, trainee tem prazo fechado e
+    # perder a data custa o ano inteiro. "" quando a fonte não diz.
+    prazo_inscricao: str = ""
     # Distância em km até onde o usuário mora, pra vaga presencial/híbrida
     # (ver utils/geo.py). None = remota, ou endereço que não deu pra situar.
     # Preenchida por filtrar_vagas ANTES do score, porque descobrir o
@@ -1232,6 +1238,20 @@ class Job:
             mercado_confirmado=bate_remoto and bool(escopos),
             idioma_bateu_titulo=idioma_bateu_titulo,
         )
+
+    @property
+    def prazo_encerrado(self) -> bool:
+        """True quando a data-limite de inscrição já passou. NÃO filtra e
+        NÃO desconta no score: a data é extraída de texto corrido no caso
+        dos programas de trainee (ver scrapers/sejatrainee.py), e um
+        engano na extração não pode custar a vaga. Serve pra avisar na
+        notificação — quem decide é quem lê."""
+        if not self.prazo_inscricao:
+            return False
+        try:
+            return date.fromisoformat(self.prazo_inscricao) < date.today()
+        except ValueError:
+            return False
 
     def afinidade(self) -> tuple[int, list[str]]:
         """Quantos dos diferenciais do usuário a vaga pede (0 a 3), e

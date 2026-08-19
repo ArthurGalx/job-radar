@@ -31,7 +31,7 @@ from notifier.telegram import (
 )
 from exporters.sheets import exportar_vaga
 from job import _normalizar
-from scrapers.descricao_gupy import buscar_descricao as descricao_gupy, buscar_endereco
+from scrapers.descricao_gupy import buscar_descricao as descricao_gupy, buscar_endereco, buscar_prazo
 from scrapers.descricao_solides import buscar_descricao as descricao_solides
 from utils.geo import distancia_de_coordenadas, distancia_km
 from perfis import FREQUENCIA_ALTA, PERFIS, Perfil
@@ -96,6 +96,13 @@ def _enriquecer_vaga(vaga) -> None:
     buscador = _BUSCADORES_DESCRICAO.get(vaga.site)
     if buscador is not None:
         vaga.descricao = buscador(vaga.link)
+
+    # Prazo de inscrição: a Gupy é a única fonte com campo estruturado
+    # (registerEndDate). O Seja Trainee extrai do texto no próprio scraper,
+    # e as outras não informam. Sem requisição extra — o cache de
+    # descricao_comum já tem a página baixada.
+    if vaga.site == "Gupy":
+        vaga.prazo_inscricao = buscar_prazo(vaga.link)
 
     vaga.distancia_km = _medir_distancia(vaga)
 
