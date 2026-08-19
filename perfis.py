@@ -60,6 +60,7 @@ from scrapers.indeed_intl import IndeedIntlScraper
 from scrapers.jobs99 import Jobs99Scraper
 from scrapers.linkedin import LinkedInScraper
 from scrapers.linkedin_intl import LinkedInIntlScraper
+from scrapers.sejatrainee import SejaTraineeScraper
 from scrapers.solides import SolidesScraper
 from scrapers.weworkremotely_intl import WeWorkRemotelyIntlScraper
 
@@ -133,6 +134,10 @@ _REGRAS_BR = RegrasFiltro(
     # (a cláusula tem prazo — ver comentário em config.py).
     setores_restritos=SETORES_RESTRITOS,
     empresas_setor_restrito=EMPRESAS_SETOR_RESTRITO,
+    # Programa de trainee não tem cidade no anúncio (ver
+    # scrapers/sejatrainee.py) — sem isso, a allowlist de São Paulo
+    # descartaria a fonte inteira.
+    aceitar_programa_nacional=True,
 )
 
 # Eixo secundário (Ibéria): mesma regra de cargo, cidade europeia em vez de
@@ -203,6 +208,9 @@ _SCRAPERS_BR = [
     # modalidade, faixa de experiência e resumo do anúncio. Ver
     # scrapers/infojobs.py.
     DefinicaoScraper(InfoJobsScraper, FREQUENCIA_ALTA),
+    # Seja Trainee: catálogo editorial da temporada de trainee, via API do
+    # WordPress. Uma requisição por ciclo, sem busca por termo.
+    DefinicaoScraper(SejaTraineeScraper, FREQUENCIA_ALTA),
     DefinicaoScraper(IndeedScraper, FREQUENCIA_ALTA),       # ~1,1%
     DefinicaoScraper(CathoScraper, FREQUENCIA_BAIXA),       # <1%, timeout frequente em headless
     DefinicaoScraper(GeekHunterScraper, FREQUENCIA_BAIXA),  # <1%

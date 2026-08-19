@@ -187,8 +187,20 @@ CASOS_COMBINA_COM = [
     # keywords_ambiguo (ex: "Trainee", "Business Analyst") só conta com
     # qualificador de domínio junto no título — sozinho é ruído de outra
     # área (banco, varejo, RH, finanças).
-    ("trainee-sem-qualificador-barrado", "Programa Trainee 2026", "São Paulo, SP", "Presencial", PERFIL_BR, False),
-    ("trainee-com-qualificador-passa", "Trainee de Tecnologia", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    # "Trainee" era cargo AMBÍGUO (exigia qualificador de tecnologia no
+    # título) e virou FORTE a pedido do usuário: programa de trainee é
+    # seleção pra formar generalista, aceita qualquer graduação e define a
+    # área durante o programa — filtrar por domínio descartava justamente
+    # o que ele quer disputar.
+    ("trainee-generalista-agora-passa", "Programa Trainee 2027", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    ("trainee-de-tecnologia-passa", "Trainee de Tecnologia", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    # Famílias adjacentes acrescentadas junto (BizOps e automação/IA).
+    ("business-operations-passa", "Business Operations Analyst", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    ("especialista-automacao-passa", "Especialista em Automação", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    ("ai-business-operations-passa", "AI Business Operations Analyst", "São Paulo, SP", "Presencial", PERFIL_BR, True),
+    # "Analista de Operações" continua ambíguo: sozinho pega back-office de
+    # banco e operação de logística.
+    ("analista-de-operacoes-sozinho-barrado", "Analista de Operações", "São Paulo, SP", "Presencial", PERFIL_BR, False),
     ("cargo-ambiguo-sem-qualificador-barrado", "Business Analyst", "São Paulo, SP", "Presencial", PERFIL_BR, False),
     ("cargo-ambiguo-com-qualificador-passa", "Business Analyst de Tecnologia", "São Paulo, SP", "Presencial", PERFIL_BR, True),
     # MEDIDO no primeiro ciclo real (285 vagas, 61% eram isto): "Product

@@ -759,6 +759,12 @@ class RegrasFiltro:
     # (ver Job.barreira). Vive em RegrasFiltro, e não como constante de
     # módulo, pelo mesmo motivo de todo o resto — é DADO de perfil, e o
     # motor não deve ter opinião sobre o setor de ninguém.
+    # Programa de trainee nacional não anuncia cidade — a alocação é
+    # definida durante a seleção. Sem isso, o filtro de cidade (allowlist
+    # de São Paulo + Grande SP) descartaria 100% do que a fonte de
+    # programas de trainee traz. True = aceita vaga marcada como
+    # Job.programa_nacional mesmo sem cidade reconhecida.
+    aceitar_programa_nacional: bool = False
     setores_restritos: list[str] | None = None
     empresas_setor_restrito: list[str] | None = None
 
@@ -953,6 +959,11 @@ class Job:
     # estimativa: as outras fontes obrigam a deduzir a posição de um CEP
     # ou do centro da cidade (ver utils/geo.py), com erro de 1 a 3 km.
     coordenadas: tuple[float, float] | None = None
+    # Vaga sem cidade porque é programa nacional (ver
+    # RegrasFiltro.aceitar_programa_nacional). Marcado pela FONTE, não
+    # deduzido do texto: só o scraper sabe que está lendo um catálogo de
+    # programa de trainee, e não um anúncio comum sem local preenchido.
+    programa_nacional: bool = False
     # Distância em km até onde o usuário mora, pra vaga presencial/híbrida
     # (ver utils/geo.py). None = remota, ou endereço que não deu pra situar.
     # Preenchida por filtrar_vagas ANTES do score, porque descobrir o
@@ -1191,10 +1202,14 @@ class Job:
             if not idioma_bateu_titulo:
                 bate_remoto = False
 
-        bate_cidade = bate_remoto or any(
-            _contem_termo(_normalizar(c), local_norm)
-            for c in regras.cidades
-            if _normalizar(c) not in _FLAGS_REMOTO
+        bate_cidade = (
+            bate_remoto
+            or (regras.aceitar_programa_nacional and self.programa_nacional)
+            or any(
+                _contem_termo(_normalizar(c), local_norm)
+                for c in regras.cidades
+                if _normalizar(c) not in _FLAGS_REMOTO
+            )
         )
 
         # Blocklist: única regra que REJEITA por presença, não por ausência

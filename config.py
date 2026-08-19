@@ -32,6 +32,34 @@ KEYWORDS_CARGO_FORTE = [
     "Business Architect",
     "Arquiteto de Negócios",
     "Arquiteta de Negócios",
+    # TRAINEE saiu do eixo ambíguo (onde exigia qualificador de tecnologia
+    # no título) a pedido do usuário, que quer ver TODOS os programas do
+    # mercado, não só os de tech. A decisão anterior fazia sentido pra quem
+    # busca vaga efetiva — "Trainee" aparece em banco, varejo e indústria —,
+    # mas programa de trainee é outra coisa: é seleção para formar
+    # generalista, aceita qualquer graduação (ele tem Administração pela
+    # USP) e a área é definida durante o programa. Filtrar por domínio aqui
+    # descartava justamente o que ele quer disputar.
+    "Trainee",
+    "Programa de Trainee",
+    # BizOps: família medida como a de melhor relação volume/concorrência
+    # pro perfil dele (10 vagas júnior/pleno só nas 22 empresas do ATS,
+    # contra 14 de produto, com uma fração dos candidatos). É o que ele fez
+    # como Business Architect. "Analista de Operações" continua AMBÍGUO
+    # abaixo — sozinho pega back-office de banco e operação de logística.
+    "Business Operations",
+    "BizOps",
+    "Excelência Operacional",
+    "Analista de Processos e Melhoria",
+    # Automação e IA aplicada: o diferencial mais raro do currículo (Make,
+    # APIs REST, webhooks, agente de IA com ROI medido). Volume menor, mas
+    # quase nenhum concorrente pleno tem caso real.
+    "Especialista em Automação",
+    "Consultor de Automação",
+    "AI Operations",
+    "AI Business Operations",
+    "Analista de Inteligência Artificial",
+    "Especialista em Inteligência Artificial",
     # "Product Discovery" fica só em TERMOS_FERRAMENTA (busca), não aqui:
     # é método, não cargo — como keyword duplicaria o termo de busca (a
     # derivação TERMOS_CARGO já puxa toda KEYWORDS) e gastaria uma sessão
@@ -50,7 +78,6 @@ KEYWORDS_CARGO_FORTE = [
 # de Produto") — é o que permite manter cargo adjacente no radar sem cada
 # um virar fonte de ruído sozinho.
 KEYWORDS_CARGO_AMBIGUO = [
-    "Trainee",
     # "Estágio"/"Estagiário" ficam FORA: o pedido é PO/trainee, e a
     # graduação já terminou (dez/2025) — vaga de estágio seria degrau pra
     # trás, e "estágio" é um dos termos de maior volume bruto dos portais
@@ -206,8 +233,11 @@ TERMOS_CARGO_EXTRA = [
     # "Trainee" sozinho já entra via KEYWORDS (derivação abaixo) e traz o
     # volume bruto de trainee de TODA área — estes dois vão direto no
     # recorte que interessa, pra não depender só do filtro pós-busca.
-    "programa de trainee tecnologia",
-    "trainee produto",
+    "programa de trainee",
+    "trainee 2027",
+    "business operations",
+    "analista de automacao de processos",
+    "inteligencia artificial aplicada",
 ]
 
 TERMOS_CARGO = sorted(set(k.lower() for k in KEYWORDS) | set(TERMOS_CARGO_EXTRA))
